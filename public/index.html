@@ -1,123 +1,103 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Smart Trash Stations</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartBin Portal</title>
+
   <style>
-    body { margin:0; font-family: Arial, sans-serif; }
-    #wrap { display:grid; grid-template-columns: 1fr 360px; height:100vh; }
-    #map { height:100vh; }
-    #panel { padding:14px; border-left:1px solid #ddd; overflow:auto; }
-    .kpi { margin:10px 0; padding:10px; border:1px solid #eee; border-radius:12px; }
-    .row { display:flex; gap:10px; align-items:center; }
-    input { padding:10px; border-radius:10px; border:1px solid #ccc; width:140px; }
-    button { padding:10px 12px; border-radius:10px; border:1px solid #ccc; cursor:pointer; }
-    .bad { color:#b00020; font-weight:700; }
-    .ok { color:#0b6b0b; font-weight:700; }
-    .muted { color:#666; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      text-align: center;
+      width: 90%;
+      max-width: 500px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      opacity: 0.7;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      transition: 0.3s ease;
+      cursor: pointer;
+      border: 1px solid #334155;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: #60a5fa;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    .card h2 {
+      margin-bottom: 10px;
+    }
+
+    .resident {
+      border-left: 6px solid #22c55e;
+    }
+
+    .authority {
+      border-left: 6px solid #60a5fa;
+    }
+
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      opacity: 0.5;
+    }
+
   </style>
 </head>
 <body>
-<div id="wrap">
-  <div id="map"></div>
-  <div id="panel">
-    <h2>Station Vitals</h2>
-    <p class="muted">Click a station marker.</p>
-    <div id="details"></div>
+
+  <div class="container">
+    <h1>SmartBin System</h1>
+    <p>Select your portal to continue</p>
+
+    <a href="/resident-login.html" style="text-decoration:none;color:inherit;">
+      <div class="card resident">
+        <h2>Residents Portal</h2>
+        <p>Find nearby stations, earn rewards, and report issues.</p>
+      </div>
+    </a>
+
+    <a href="/authority-login.html" style="text-decoration:none;color:inherit;">
+      <div class="card authority">
+        <h2>Authorities Portal</h2>
+        <p>Live monitoring, alerts, and analytics dashboard.</p>
+      </div>
+    </a>
+
+    <div class="footer">
+      SmartBin © 2025
+    </div>
   </div>
-</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-  const map = L.map('map').setView([26.4207, 50.0888], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
-
-  const details = document.getElementById('details');
-  const markers = new Map();
-  const statusClass = ok => ok ? "ok" : "bad";
-
-  function renderStation(s) {
-    const isOnline = (s.seconds_since_seen <= 300);
-    const onlineLabel = isOnline ? "ONLINE" : "OFFLINE";
-
-    details.innerHTML = `
-      <div class="kpi">
-        <div><strong>${s.station_id}</strong> <span class="${statusClass(isOnline)}">(${onlineLabel})</span></div>
-        <div class="muted">${(s.name || "")}</div>
-        <div class="muted">${Number(s.lat).toFixed(5)}, ${Number(s.lng).toFixed(5)}</div>
-        <div class="muted">Last seen: ${s.last_seen || "N/A"}</div>
-      </div>
-
-      <div class="kpi">
-        <div>Fill: <strong>${Number(s.fill_percent).toFixed(1)}%</strong></div>
-        <div>FULL: <strong class="${statusClass(!s.is_full)}">${s.is_full ? "YES" : "NO"}</strong></div>
-        <div>Hatch: <strong>${s.hatch_state}</strong></div>
-        <div>Service Lock: <strong>${s.service_lock_state}</strong></div>
-        <div>Odor Alert: <strong class="${statusClass(!s.odor_alert)}">${s.odor_alert ? "YES" : "NO"}</strong></div>
-        <div>Fault: <strong class="${statusClass(Number(s.fault_code) === 0)}">${s.fault_code}</strong></div>
-        <div class="muted">Wi-Fi RSSI: ${s.signal_rssi ?? "N/A"} dBm</div>
-      </div>
-
-      <div class="kpi">
-        <h3>Authorized Service Access</h3>
-        <p class="muted">Enter code to unlock the service door (Servo 2) for 120s.</p>
-        <div class="row">
-          <input id="code" type="password" placeholder="Code" />
-          <button id="unlockBtn">Unlock</button>
-        </div>
-        <p id="msg" class="muted"></p>
-      </div>
-    `;
-
-    document.getElementById("unlockBtn").onclick = async () => {
-      const code = document.getElementById("code").value;
-      const msg = document.getElementById("msg");
-      msg.textContent = "Sending unlock request...";
-
-      try {
-        const r = await fetch(`/api/v1/stations/${encodeURIComponent(s.station_id)}/unlock`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code })
-        });
-
-        const j = await r.json();
-        if (!r.ok) {
-          msg.innerHTML = `<span class="bad">${j.error || "Failed"}</span>`;
-          return;
-        }
-        msg.innerHTML = `<span class="ok">${j.message}</span>`;
-      } catch (e) {
-        msg.innerHTML = `<span class="bad">Network error</span>`;
-      }
-    };
-  }
-
-  async function loadStations() {
-    const res = await fetch('/api/v1/stations');
-    const list = await res.json();
-
-    list.forEach(s => {
-      const key = s.station_id;
-      if (!markers.has(key)) {
-        const m = L.marker([s.lat, s.lng]).addTo(map);
-        m.bindTooltip(key);
-        m.on('click', () => renderStation(s));
-        markers.set(key, m);
-      } else {
-        markers.get(key).setLatLng([s.lat, s.lng]);
-        markers.get(key).off('click');
-        markers.get(key).on('click', () => renderStation(s));
-      }
-    });
-  }
-
-  loadStations();
-  setInterval(loadStations, 5000);
-</script>
 </body>
 </html>
