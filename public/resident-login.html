@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Residents Login</title>
+  <style>
+    body{font-family:system-ui;margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff}
+    .wrap{width:min(980px,94vw);display:grid;gap:16px;grid-template-columns:1fr}
+    @media (min-width:860px){.wrap{grid-template-columns:1fr 1fr}}
+    .card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:18px}
+    h2{margin:0 0 10px 0}
+    .muted{opacity:.75;font-size:13px;margin-bottom:12px}
+    input{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#fff;margin:8px 0}
+    button{width:100%;padding:12px 14px;border:0;border-radius:10px;font-weight:800;cursor:pointer;background:#22c55e;color:#07130a;margin-top:8px}
+    .err{color:#ffb4b4;min-height:20px}
+    a{color:#93c5fd;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Create account</h2>
+      <div class="muted">Register once, then you can log in anytime.</div>
+      <div class="err" id="regErr"></div>
+      <input id="regName" placeholder="Name" />
+      <input id="regEmail" placeholder="Email" />
+      <input id="regPass" placeholder="Password" type="password" />
+      <button id="regBtn">Register</button>
+    </div>
+
+    <div class="card">
+      <h2>Login</h2>
+      <div class="muted">Already registered? Log in to access the Residents UI.</div>
+      <div class="err" id="logErr"></div>
+      <input id="logEmail" placeholder="Email" />
+      <input id="logPass" placeholder="Password" type="password" />
+      <button id="logBtn">Login</button>
+      <p style="margin-top:14px;"><a href="/">← Back</a></p>
+    </div>
+  </div>
+
+<script>
+async function post(url, data){
+  const r = await fetch(url, {
+    method:"POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(data)
+  });
+  const j = await r.json().catch(()=>({ok:false,error:"Bad response"}));
+  if(!r.ok || !j.ok) throw new Error(j.error || "Request failed");
+  return j;
+}
+
+document.getElementById("regBtn").onclick = async () => {
+  document.getElementById("regErr").textContent = "";
+  try{
+    await post("/api/auth/register", {
+      name: document.getElementById("regName").value.trim(),
+      email: document.getElementById("regEmail").value.trim(),
+      password: document.getElementById("regPass").value
+    });
+    location.href = "/resident";
+  }catch(e){
+    document.getElementById("regErr").textContent = e.message;
+  }
+};
+
+document.getElementById("logBtn").onclick = async () => {
+  document.getElementById("logErr").textContent = "";
+  try{
+    await post("/api/auth/login", {
+      email: document.getElementById("logEmail").value.trim(),
+      password: document.getElementById("logPass").value
+    });
+    location.href = "/resident";
+  }catch(e){
+    document.getElementById("logErr").textContent = e.message;
+  }
+};
+</script>
+</body>
+</html>
