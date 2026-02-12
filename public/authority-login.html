@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Authorities Login</title>
+  <style>
+    body{font-family:system-ui;margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff}
+    .card{width:min(520px,92vw);background:#1e293b;border:1px solid #334155;border-radius:16px;padding:20px}
+    h2{margin:0 0 10px 0}
+    p{opacity:.75;margin:0 0 16px 0}
+    input{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#fff}
+    button{width:100%;padding:12px 14px;border:0;border-radius:10px;font-weight:800;cursor:pointer;background:#60a5fa;color:#07101a;margin-top:12px}
+    .err{color:#ffb4b4;min-height:20px;margin:10px 0 0}
+    a{color:#93c5fd;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Authorities Portal</h2>
+    <p>Enter access password to continue.</p>
+
+    <div class="err" id="err"></div>
+
+    <input id="pass" type="password" placeholder="Password" />
+    <button id="btn">Enter</button>
+
+    <p style="margin-top:14px;"><a href="/">← Back</a></p>
+  </div>
+
+<script>
+async function post(url, data){
+  const r = await fetch(url, {
+    method:"POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(data)
+  });
+  const j = await r.json().catch(()=>({ok:false,error:"Bad response"}));
+  if(!r.ok || !j.ok) throw new Error(j.error || "Request failed");
+  return j;
+}
+
+document.getElementById("btn").onclick = async () => {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  try{
+    await post("/api/auth/authority-login", { password: document.getElementById("pass").value });
+    location.href = "/authority";
+  }catch(e){
+    err.textContent = e.message;
+  }
+};
+</script>
+</body>
+</html>
