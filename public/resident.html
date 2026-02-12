@@ -1,12 +1,134 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Residents</title></head>
-<body style="font-family:system-ui;background:#0f172a;color:#fff;padding:18px">
-  <h2>Residents UI</h2>
-  <p>Next: 4 tabs (Nearby Stations, How to Sort, Rewards, Report).</p>
-  <button onclick="logout()" style="padding:10px 14px;border-radius:10px;border:0;font-weight:800;cursor:pointer">Logout</button>
-  <script>
-    async function logout(){ await fetch("/api/auth/logout",{method:"POST"}); location.href="/"; }
-  </script>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Residents Portal</title>
+
+<style>
+body {
+  margin:0;
+  font-family:system-ui;
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  color:white;
+}
+
+header {
+  padding:16px;
+  background:#0b1220;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+header h2 {
+  margin:0;
+}
+
+button {
+  padding:10px 14px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+.logout {
+  background:#ef4444;
+  color:white;
+}
+
+.tabs {
+  display:flex;
+  gap:10px;
+  padding:16px;
+  background:#111827;
+  overflow-x:auto;
+}
+
+.tab-btn {
+  background:#1f2937;
+  color:white;
+}
+
+.tab-btn.active {
+  background:#22c55e;
+  color:#07130a;
+}
+
+.section {
+  display:none;
+  padding:20px;
+}
+
+.section.active {
+  display:block;
+}
+
+.card {
+  background:#1e293b;
+  padding:20px;
+  border-radius:12px;
+  margin-bottom:16px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>Residents Dashboard</h2>
+  <button class="logout" onclick="logout()">Logout</button>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('nearby')">Nearby Stations</button>
+  <button class="tab-btn" onclick="showTab('sort')">How to Sort</button>
+  <button class="tab-btn" onclick="showTab('rewards')">Rewards</button>
+  <button class="tab-btn" onclick="showTab('report')">Report / Feedback</button>
+</div>
+
+<div id="nearby" class="section active">
+  <div class="card">
+    <h3>Nearby Stations</h3>
+    <p>Stations list will appear here.</p>
+  </div>
+</div>
+
+<div id="sort" class="section">
+  <div class="card">
+    <h3>How to Sort</h3>
+    <p>Sorting guide will appear here.</p>
+  </div>
+</div>
+
+<div id="rewards" class="section">
+  <div class="card">
+    <h3>Rewards</h3>
+    <p>QR + Points system will appear here.</p>
+  </div>
+</div>
+
+<div id="report" class="section">
+  <div class="card">
+    <h3>Report an Issue</h3>
+    <p>Photo upload + issue form will appear here.</p>
+  </div>
+</div>
+
+<script>
+function showTab(id){
+  document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+async function logout(){
+  await fetch('/api/auth/logout',{method:'POST'});
+  location.href='/';
+}
+</script>
+
 </body>
 </html>
