@@ -16,7 +16,5 @@
   	"cors": "^2.8.6",
   	"express": "^4.19.2",
   	"express-session": "^1.18.0",
-  	"lowdb": "^7.0.1",
-  	"nanoid": "^5.1.6"
 	}
 }
