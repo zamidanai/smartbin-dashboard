@@ -1,42 +1,18 @@
-// server.js
-// SmartBin backend: auth (residents + authority) + stations storage
-
 const express = require("express");
 const cors = require("cors");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const path = require("path");
-const { LowSync } = require("lowdb");
-const { JSONFileSync } = require("lowdb/node");
-const { nanoid } = require("nanoid");
+const fs = require("fs");
 
 const app = express();
 
-// ---------- CONFIG ----------
+// ===== CONFIG =====
 const PORT = process.env.PORT || 8080;
 const SESSION_SECRET = process.env.SESSION_SECRET || "dev_secret_change_me";
-const AUTHORITY_PASSWORD =
-  process.env.AUTHORITY_PASSWORD || "smartbinaccess";
+const AUTHORITY_PASSWORD = process.env.AUTHORITY_PASSWORD || "smartbinaccess";
 
-const DB_FILE = path.join(__dirname, "db.json");
-const defaultData = {
-  stations: [],
-  users: [],
-  events: [],
-  feedback: []
-};
-
-// ---------- DB (lowdb) ----------
-const adapter = new JSONFileSync(DB_FILE);
-const db = new LowSync(adapter, defaultData);
-db.read();
-if (!db.data) db.data = defaultData;
-
-function saveDB() {
-  db.write();
-}
-
-// ---------- MIDDLEWARE ----------
+// ===== MIDDLEWARE =====
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -46,43 +22,50 @@ app.use(
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: false // ok for now; you can switch to true+trust proxy later
-    }
+    cookie: { httpOnly: true, sameSite: "lax", secure: false }
   })
 );
 
-// Static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// ---------- AUTH HELPERS ----------
+// ===== JSON DB =====
+const DB_FILE = path.join(__dirname, "db.json");
+
+function ensureDB() {
+  if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(
+      DB_FILE,
+      JSON.stringify({ users: [], stations: [], events: [], feedback: [] }, null, 2)
+    );
+  }
+}
+
+function readDB() {
+  ensureDB();
+  return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+}
+
+function writeDB(db) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+// ===== AUTH HELPERS =====
 function requireAuthority(req, res, next) {
   if (req.session?.authority === true) return next();
   return res.status(401).json({ ok: false, error: "AUTHORITY_NOT_LOGGED_IN" });
 }
 
-// ---------- AUTH ROUTES ----------
-
-// Resident register
+// ===== AUTH API =====
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password } = req.body || {};
-  if (!name || !email || !password) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Missing name/email/password" });
-  }
+  if (!name || !email || !password)
+    return res.status(400).json({ ok: false, error: "Missing name/email/password" });
 
+  const db = readDB();
   const e = String(email).toLowerCase().trim();
-  const dbData = db.data;
 
-  const existing = dbData.users.find((u) => u.email === e);
-  if (existing) {
-    return res
-      .status(409)
-      .json({ ok: false, error: "Email already registered" });
-  }
+  if (db.users.find((u) => u.email === e))
+    return res.status(409).json({ ok: false, error: "Email already registered" });
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = {
@@ -94,58 +77,44 @@ app.post("/api/auth/register", async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  dbData.users.push(user);
-  saveDB();
+  db.users.push(user);
+  writeDB(db);
 
   req.session.user = { id: user.id, name: user.name, email: user.email };
   res.json({ ok: true, user: req.session.user });
 });
 
-// Resident login
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Missing email/password" });
-  }
+  if (!email || !password)
+    return res.status(400).json({ ok: false, error: "Missing email/password" });
 
+  const db = readDB();
   const e = String(email).toLowerCase().trim();
-  const dbData = db.data;
-  const user = dbData.users.find((u) => u.email === e);
-  if (!user) {
-    return res.status(401).json({ ok: false, error: "Invalid credentials" });
-  }
+  const user = db.users.find((u) => u.email === e);
+  if (!user) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({ ok: false, error: "Invalid credentials" });
-  }
+  if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
   req.session.user = { id: user.id, name: user.name, email: user.email };
   res.json({ ok: true, user: req.session.user });
 });
 
-// Authority login (password only)
 app.post("/api/auth/authority-login", (req, res) => {
   const { password } = req.body || {};
-  if (!password) {
-    return res.status(400).json({ ok: false, error: "Missing password" });
-  }
-  if (password !== AUTHORITY_PASSWORD) {
+  if (!password) return res.status(400).json({ ok: false, error: "Missing password" });
+  if (password !== AUTHORITY_PASSWORD)
     return res.status(401).json({ ok: false, error: "Wrong password" });
-  }
 
   req.session.authority = true;
   res.json({ ok: true });
 });
 
-// Logout for both
 app.post("/api/auth/logout", (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-// Who am I (optional debug)
 app.get("/api/auth/me", (req, res) => {
   res.json({
     ok: true,
@@ -154,90 +123,55 @@ app.get("/api/auth/me", (req, res) => {
   });
 });
 
-// ---------- PAGE GUARDS ----------
-
+// ===== PAGE GUARDS =====
 app.get("/resident", (req, res) => {
   if (!req.session?.user?.id) return res.redirect("/resident-login.html");
   res.sendFile(path.join(__dirname, "public", "resident.html"));
 });
 
 app.get("/authority", (req, res) => {
-  if (req.session?.authority !== true)
-    return res.redirect("/authority-login.html");
+  if (req.session?.authority !== true) return res.redirect("/authority-login.html");
   res.sendFile(path.join(__dirname, "public", "authority.html"));
 });
 
-// ---------- STATION API (keeps your ESP/dashboard working) ----------
-
-// List stations (used by dashboards)
+// ===== STATIONS API =====
 app.get("/api/v1/stations", (req, res) => {
-  res.json({ ok: true, stations: db.data.stations || [] });
+  const db = readDB();
+  res.json({ ok: true, stations: db.stations || [] });
 });
 
-// ESP32 (or simulator) sends telemetry for a station
-// Body example: { name, lat, lng, fillPct, odorAlert, hatchOpen, locked }
 app.post("/api/v1/stations/:id/telemetry", (req, res) => {
-  const { id } = req.params;
-  const payload = req.body || {};
-  const dbData = db.data;
+  const db = readDB();
+  const id = req.params.id;
+  const p = req.body || {};
 
-  let station = dbData.stations.find((s) => s.id === id);
-  if (!station) {
-    station = {
-      id,
-      code: id.toUpperCase(),
-      name: payload.name || `Station ${id}`,
-      lat: payload.lat || 0,
-      lng: payload.lng || 0,
-      createdAt: new Date().toISOString()
-    };
-    dbData.stations.push(station);
+  let s = (db.stations || []).find((x) => x.id === id);
+  if (!s) {
+    s = { id, name: p.name || `Station ${id}`, lat: p.lat || 0, lng: p.lng || 0, createdAt: new Date().toISOString() };
+    db.stations.push(s);
   }
 
-  station.fillPct =
-    typeof payload.fillPct === "number"
-      ? Math.max(0, Math.min(100, payload.fillPct))
-      : station.fillPct || 0;
-  station.odorAlert = !!payload.odorAlert;
-  station.hatchOpen = !!payload.hatchOpen;
-  station.locked = !!payload.locked;
-  station.lastSeen = new Date().toISOString();
+  if (typeof p.fillPct === "number") s.fillPct = Math.max(0, Math.min(100, p.fillPct));
+  if (typeof p.odorAlert !== "undefined") s.odorAlert = !!p.odorAlert;
+  if (typeof p.hatchOpen !== "undefined") s.hatchOpen = !!p.hatchOpen;
+  if (typeof p.locked !== "undefined") s.locked = !!p.locked;
 
-  saveDB();
-  res.json({ ok: true, station });
+  s.lastSeen = new Date().toISOString();
+  writeDB(db);
+  res.json({ ok: true, station: s });
 });
 
-// Authority marks station emptied (example action)
 app.post("/api/v1/stations/:id/mark-emptied", requireAuthority, (req, res) => {
-  const dbData = db.data;
-  const station = dbData.stations.find((s) => s.id === req.params.id);
-  if (!station)
-    return res.status(404).json({ ok: false, error: "Station not found" });
+  const db = readDB();
+  const s = (db.stations || []).find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ ok: false, error: "Station not found" });
 
-  station.fillPct = 0;
-  station.locked = false;
-  station.lastEmptiedAt = new Date().toISOString();
-  saveDB();
+  s.fillPct = 0;
+  s.locked = false;
+  s.lastEmptiedAt = new Date().toISOString();
+  writeDB(db);
 
-  res.json({ ok: true, station });
+  res.json({ ok: true, station: s });
 });
 
-// Feedback endpoint placeholder (for Report / Feedback tab later)
-app.post("/api/v1/feedback", (req, res) => {
-  const { stationId, issueType, note } = req.body || {};
-  const item = {
-    id: nanoid(),
-    stationId: stationId || null,
-    issueType: issueType || "other",
-    note: note || "",
-    createdAt: new Date().toISOString()
-  };
-  db.data.feedback.push(item);
-  saveDB();
-  res.json({ ok: true, feedback: item });
-});
-
-// ---------- START SERVER ----------
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
