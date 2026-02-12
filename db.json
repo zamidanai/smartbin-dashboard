@@ -1,0 +1,19 @@
+{
+  "stations": {
+    "DAM-001": {
+      "station_id": "DAM-001",
+      "name": "Prototype Station",
+      "lat": 26.4207,
+      "lng": 50.0888,
+      "fill_percent": 0,
+      "is_full": false,
+      "hatch_state": "CLOSED",
+      "service_lock_state": "LOCKED",
+      "odor_alert": false,
+      "fault_code": 0,
+      "signal_rssi": null,
+      "last_seen": null
+    }
+  },
+  "commands": {}
+}
