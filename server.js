@@ -1,165 +1,243 @@
+// server.js
+// SmartBin backend: auth (residents + authority) + stations storage
+
 const express = require("express");
 const cors = require("cors");
-const { Low } = require("lowdb");
-const { JSONFile } = require("lowdb/node");
+const session = require("express-session");
+const bcrypt = require("bcryptjs");
+const path = require("path");
+const { LowSync } = require("lowdb");
+const { JSONFileSync } = require("lowdb/node");
 const { nanoid } = require("nanoid");
 
 const app = express();
+
+// ---------- CONFIG ----------
+const PORT = process.env.PORT || 8080;
+const SESSION_SECRET = process.env.SESSION_SECRET || "dev_secret_change_me";
+const AUTHORITY_PASSWORD =
+  process.env.AUTHORITY_PASSWORD || "smartbinaccess";
+
+const DB_FILE = path.join(__dirname, "db.json");
+const defaultData = {
+  stations: [],
+  users: [],
+  events: [],
+  feedback: []
+};
+
+// ---------- DB (lowdb) ----------
+const adapter = new JSONFileSync(DB_FILE);
+const db = new LowSync(adapter, defaultData);
+db.read();
+if (!db.data) db.data = defaultData;
+
+function saveDB() {
+  db.write();
+}
+
+// ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ===== SETTINGS =====
-const ADMIN_CODE = process.env.ADMIN_CODE || "1234";
-const UNLOCK_DURATION_SEC = 120;
-const COMMAND_TTL_SEC = 180;
+app.use(
+  session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false // ok for now; you can switch to true+trust proxy later
+    }
+  })
+);
 
-// ===== DB (JSON file) =====
-const adapter = new JSONFile("./db.json");
-const db = new Low(adapter, { stations: {}, commands: {} });
+// Static files
+app.use(express.static(path.join(__dirname, "public")));
 
-async function initDb() {
-  await db.read();
-  db.data ||= { stations: {}, commands: {} };
-
-  db.data.stations["DAM-001"] ||= {
-    station_id: "DAM-001",
-    name: "Prototype Station",
-    lat: 26.4207,
-    lng: 50.0888,
-    fill_percent: 0,
-    is_full: false,
-    hatch_state: "CLOSED",
-    service_lock_state: "LOCKED",
-    odor_alert: false,
-    fault_code: 0,
-    signal_rssi: null,
-    last_seen: null
-  };
-
-  await db.write();
+// ---------- AUTH HELPERS ----------
+function requireAuthority(req, res, next) {
+  if (req.session?.authority === true) return next();
+  return res.status(401).json({ ok: false, error: "AUTHORITY_NOT_LOGGED_IN" });
 }
 
-function secondsSince(ts) {
-  if (!ts) return 999999;
-  return Math.floor((Date.now() - ts) / 1000);
-}
+// ---------- AUTH ROUTES ----------
 
-// ESP32 -> Telemetry
-app.post("/api/v1/telemetry", async (req, res) => {
-  const t = req.body || {};
-  if (!t.station_id) return res.status(400).json({ ok: false, error: "station_id required" });
+// Resident register
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password } = req.body || {};
+  if (!name || !email || !password) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "Missing name/email/password" });
+  }
 
-  await db.read();
-  db.data ||= { stations: {}, commands: {} };
+  const e = String(email).toLowerCase().trim();
+  const dbData = db.data;
 
-  const s = db.data.stations[t.station_id] || {
-    station_id: t.station_id,
-    name: t.station_id,
-    lat: 26.4207,
-    lng: 50.0888
+  const existing = dbData.users.find((u) => u.email === e);
+  if (existing) {
+    return res
+      .status(409)
+      .json({ ok: false, error: "Email already registered" });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = {
+    id: "u_" + Date.now(),
+    name: String(name).trim(),
+    email: e,
+    passwordHash,
+    points: 0,
+    createdAt: new Date().toISOString()
   };
 
-  s.fill_percent = Number(t.fill_percent ?? 0);
-  s.is_full = !!t.is_full;
-  s.hatch_state = String(t.hatch_state ?? "CLOSED");
-  s.service_lock_state = String(t.service_lock_state ?? "LOCKED");
-  s.odor_alert = !!t.odor_alert;
-  s.fault_code = Number(t.fault_code ?? 0);
-  s.signal_rssi = (t.signal_rssi ?? null);
-  s.last_seen = Date.now();
+  dbData.users.push(user);
+  saveDB();
 
-  db.data.stations[t.station_id] = s;
-  await db.write();
+  req.session.user = { id: user.id, name: user.name, email: user.email };
+  res.json({ ok: true, user: req.session.user });
+});
 
+// Resident login
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "Missing email/password" });
+  }
+
+  const e = String(email).toLowerCase().trim();
+  const dbData = db.data;
+  const user = dbData.users.find((u) => u.email === e);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: "Invalid credentials" });
+  }
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) {
+    return res.status(401).json({ ok: false, error: "Invalid credentials" });
+  }
+
+  req.session.user = { id: user.id, name: user.name, email: user.email };
+  res.json({ ok: true, user: req.session.user });
+});
+
+// Authority login (password only)
+app.post("/api/auth/authority-login", (req, res) => {
+  const { password } = req.body || {};
+  if (!password) {
+    return res.status(400).json({ ok: false, error: "Missing password" });
+  }
+  if (password !== AUTHORITY_PASSWORD) {
+    return res.status(401).json({ ok: false, error: "Wrong password" });
+  }
+
+  req.session.authority = true;
   res.json({ ok: true });
 });
 
-// Website -> Stations list
-app.get("/api/v1/stations", async (req, res) => {
-  await db.read();
-  const stations = Object.values(db.data.stations || {}).map(s => ({
-    ...s,
-    seconds_since_seen: secondsSince(s.last_seen),
-    last_seen: s.last_seen ? new Date(s.last_seen).toISOString() : null
-  }));
-  res.json(stations);
+// Logout for both
+app.post("/api/auth/logout", (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
 });
 
-// Website -> Unlock (queues command)
-app.post("/api/v1/stations/:id/unlock", async (req, res) => {
-  const stationId = req.params.id;
-  const code = String(req.body?.code ?? "");
+// Who am I (optional debug)
+app.get("/api/auth/me", (req, res) => {
+  res.json({
+    ok: true,
+    resident: req.session?.user || null,
+    authority: req.session?.authority === true
+  });
+});
 
-  if (code !== ADMIN_CODE) {
-    return res.status(403).json({ ok: false, error: "Invalid code" });
+// ---------- PAGE GUARDS ----------
+
+app.get("/resident", (req, res) => {
+  if (!req.session?.user?.id) return res.redirect("/resident-login.html");
+  res.sendFile(path.join(__dirname, "public", "resident.html"));
+});
+
+app.get("/authority", (req, res) => {
+  if (req.session?.authority !== true)
+    return res.redirect("/authority-login.html");
+  res.sendFile(path.join(__dirname, "public", "authority.html"));
+});
+
+// ---------- STATION API (keeps your ESP/dashboard working) ----------
+
+// List stations (used by dashboards)
+app.get("/api/v1/stations", (req, res) => {
+  res.json({ ok: true, stations: db.data.stations || [] });
+});
+
+// ESP32 (or simulator) sends telemetry for a station
+// Body example: { name, lat, lng, fillPct, odorAlert, hatchOpen, locked }
+app.post("/api/v1/stations/:id/telemetry", (req, res) => {
+  const { id } = req.params;
+  const payload = req.body || {};
+  const dbData = db.data;
+
+  let station = dbData.stations.find((s) => s.id === id);
+  if (!station) {
+    station = {
+      id,
+      code: id.toUpperCase(),
+      name: payload.name || `Station ${id}`,
+      lat: payload.lat || 0,
+      lng: payload.lng || 0,
+      createdAt: new Date().toISOString()
+    };
+    dbData.stations.push(station);
   }
 
-  await db.read();
-  db.data ||= { stations: {}, commands: {} };
+  station.fillPct =
+    typeof payload.fillPct === "number"
+      ? Math.max(0, Math.min(100, payload.fillPct))
+      : station.fillPct || 0;
+  station.odorAlert = !!payload.odorAlert;
+  station.hatchOpen = !!payload.hatchOpen;
+  station.locked = !!payload.locked;
+  station.lastSeen = new Date().toISOString();
 
-  const command_id = "cmd_" + nanoid(10);
-  const now = Date.now();
+  saveDB();
+  res.json({ ok: true, station });
+});
 
-  db.data.commands[command_id] = {
-    command_id,
-    station_id: stationId,
-    command: "UNLOCK_SERVICE",
-    duration_sec: UNLOCK_DURATION_SEC,
-    created_at: now,
-    expires_at: now + COMMAND_TTL_SEC * 1000,
-    status: "PENDING"
+// Authority marks station emptied (example action)
+app.post("/api/v1/stations/:id/mark-emptied", requireAuthority, (req, res) => {
+  const dbData = db.data;
+  const station = dbData.stations.find((s) => s.id === req.params.id);
+  if (!station)
+    return res.status(404).json({ ok: false, error: "Station not found" });
+
+  station.fillPct = 0;
+  station.locked = false;
+  station.lastEmptiedAt = new Date().toISOString();
+  saveDB();
+
+  res.json({ ok: true, station });
+});
+
+// Feedback endpoint placeholder (for Report / Feedback tab later)
+app.post("/api/v1/feedback", (req, res) => {
+  const { stationId, issueType, note } = req.body || {};
+  const item = {
+    id: nanoid(),
+    stationId: stationId || null,
+    issueType: issueType || "other",
+    note: note || "",
+    createdAt: new Date().toISOString()
   };
-
-  await db.write();
-  res.json({ ok: true, message: `Unlock queued for ${UNLOCK_DURATION_SEC}s.`, command_id });
+  db.data.feedback.push(item);
+  saveDB();
+  res.json({ ok: true, feedback: item });
 });
 
-// ESP32 -> Poll commands
-app.get("/api/v1/commands/poll", async (req, res) => {
-  const stationId = String(req.query.station_id ?? "");
-  if (!stationId) return res.status(400).json({ ok: false, error: "station_id required" });
-
-  await db.read();
-  db.data ||= { stations: {}, commands: {} };
-
-  const now = Date.now();
-  const cmds = Object.values(db.data.commands || {})
-    .filter(c => c.station_id === stationId && c.status === "PENDING" && c.expires_at > now)
-    .sort((a, b) => a.created_at - b.created_at);
-
-  if (cmds.length === 0) return res.json({ ok: true, command: "NONE" });
-
-  const cmd = cmds[0];
-  cmd.status = "SENT";
-  db.data.commands[cmd.command_id] = cmd;
-  await db.write();
-
-  res.json({ ok: true, command: cmd.command, duration_sec: cmd.duration_sec, command_id: cmd.command_id });
-});
-
-// ESP32 -> Ack
-app.post("/api/v1/commands/ack", async (req, res) => {
-  const { station_id, command_id, status } = req.body || {};
-  if (!station_id || !command_id) return res.status(400).json({ ok: false, error: "station_id and command_id required" });
-
-  await db.read();
-  db.data ||= { stations: {}, commands: {} };
-
-  const cmd = db.data.commands?.[command_id];
-  if (cmd && cmd.station_id === station_id) {
-    cmd.status = String(status ?? "DONE");
-    db.data.commands[command_id] = cmd;
-    await db.write();
-  }
-
-  res.json({ ok: true });
-});
-
-// Serve Website
-app.use("/", express.static("./public"));
-
-initDb().then(() => {
-  const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+// ---------- START SERVER ----------
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
