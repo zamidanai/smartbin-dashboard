@@ -1,40 +1,31 @@
 {
   "users": [],
   "stations": [
-    {
-      "id": "station1",
-      "name": "Central Block A",
-      "lat": 26.4205,
-      "lng": 50.0888,
-      "fillPct": 35,
-      "odorAlert": false,
-      "hatchOpen": false,
-      "locked": false,
-      "lastSeen": "2025-01-01T12:00:00Z"
-    },
-    {
-      "id": "station2",
-      "name": "North Residential",
-      "lat": 26.4215,
-      "lng": 50.0902,
-      "fillPct": 82,
-      "odorAlert": true,
-      "hatchOpen": false,
-      "locked": false,
-      "lastSeen": "2025-01-01T12:05:00Z"
-    },
-    {
-      "id": "station3",
-      "name": "Commercial Corner",
-      "lat": 26.4199,
-      "lng": 50.0874,
-      "fillPct": 97,
-      "odorAlert": false,
-      "hatchOpen": false,
-      "locked": true,
-      "lastSeen": "2025-01-01T12:10:00Z"
-    }
+    { "id": "S01", "name": "Grid North 1", "lat": 26.3233612, "lng": 50.2277122, "fillPct": 22, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:00:00Z" },
+    { "id": "S02", "name": "Grid North 2", "lat": 26.3233612, "lng": 50.2301122, "fillPct": 31, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:01:00Z" },
+    { "id": "S03", "name": "Grid North 3", "lat": 26.3233612, "lng": 50.2253122, "fillPct": 45, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:02:00Z" },
+
+    { "id": "S04", "name": "Grid Upper Mid 1", "lat": 26.3213612, "lng": 50.2277122, "fillPct": 58, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:03:00Z" },
+    { "id": "S05", "name": "Grid Upper Mid 2", "lat": 26.3213612, "lng": 50.2301122, "fillPct": 72, "odorAlert": true, "locked": false, "lastSeen": "2026-02-14T12:04:00Z" },
+    { "id": "S06", "name": "Grid Upper Mid 3", "lat": 26.3213612, "lng": 50.2253122, "fillPct": 81, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:05:00Z" },
+
+    { "id": "S07", "name": "Grid Center 1", "lat": 26.3188612, "lng": 50.2277122, "fillPct": 92, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:06:00Z" },
+    { "id": "S08", "name": "Grid Center 2", "lat": 26.3188612, "lng": 50.2301122, "fillPct": 97, "odorAlert": false, "locked": true, "lastSeen": "2026-02-14T12:07:00Z" },
+    { "id": "S09", "name": "Grid Center 3", "lat": 26.3188612, "lng": 50.2253122, "fillPct": 64, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:08:00Z" },
+
+    { "id": "S10", "name": "Grid Lower Mid 1", "lat": 26.3163612, "lng": 50.2277122, "fillPct": 53, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:09:00Z" },
+    { "id": "S11", "name": "Grid Lower Mid 2", "lat": 26.3163612, "lng": 50.2301122, "fillPct": 44, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:10:00Z" },
+    { "id": "S12", "name": "Grid Lower Mid 3", "lat": 26.3163612, "lng": 50.2253122, "fillPct": 33, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:11:00Z" },
+
+    { "id": "S13", "name": "Grid South 1", "lat": 26.3143612, "lng": 50.2277122, "fillPct": 21, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:12:00Z" },
+    { "id": "S14", "name": "Grid South 2", "lat": 26.3143612, "lng": 50.2301122, "fillPct": 37, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:13:00Z" },
+    { "id": "S15", "name": "Grid South 3", "lat": 26.3143612, "lng": 50.2253122, "fillPct": 49, "odorAlert": false, "locked": false, "lastSeen": "2026-02-14T12:14:00Z" }
   ],
   "events": [],
-  "feedback": []
+  "feedback": [],
+  "rewardsCatalog": [
+    { "id": "r1", "name": "5% Discount Coupon", "cost": 50, "partner": "Local Partner" },
+    { "id": "r2", "name": "10% Discount Coupon", "cost": 100, "partner": "Local Partner" },
+    { "id": "r3", "name": "Free Coffee Coupon", "cost": 150, "partner": "Cafe Partner" }
+  ]
 }
