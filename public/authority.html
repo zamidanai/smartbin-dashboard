@@ -1,272 +1,418 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Authority Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authority Dashboard (Map)</title>
 
-<style>
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background: linear-gradient(135deg,#0f172a,#1e293b);
-  color: white;
-}
+  <!-- Leaflet Map -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-header {
-  padding: 16px;
-  background: #0b1220;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #0b1220;
+      color: white;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-button {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 800;
-}
+    header {
+      padding: 14px 16px;
+      background: #070d18;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
 
-.logout { background: #ef4444; color: white; }
+    header h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0.3px;
+    }
 
-.tabs {
-  display: flex;
-  gap: 10px;
-  padding: 16px;
-  background: #111827;
-}
+    button {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-weight: 900;
+    }
 
-.tab-btn {
-  background: #1f2937;
-  color: white;
-}
+    .logout { background: #ef4444; color: white; }
+    .refresh { background: #334155; color: white; }
 
-.tab-btn.active {
-  background: #3b82f6;
-}
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
 
-.section {
-  display: none;
-  padding: 20px;
-}
+    #map {
+      width: 100%;
+      height: calc(100vh - 70px);
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
 
-.section.active {
-  display: block;
-}
+    .panel {
+      height: calc(100vh - 70px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #0f172a;
+      padding: 14px;
+      overflow: auto;
+    }
 
-.card {
-  background: #1e293b;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
+    .card {
+      background: #111827;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 12px;
+    }
 
-.station-card {
-  background: #111827;
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-}
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
 
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+    }
 
-.badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-weight: 900;
-  font-size: 12px;
-}
+    .green { background: rgba(34,197,94,0.18); color: #22c55e; }
+    .yellow { background: rgba(250,204,21,0.18); color: #facc15; }
+    .red { background: rgba(239,68,68,0.18); color: #ef4444; }
 
-.green { background: rgba(34,197,94,0.2); color: #22c55e; }
-.yellow { background: rgba(250,204,21,0.2); color: #facc15; }
-.red { background: rgba(239,68,68,0.2); color: #ef4444; }
+    .muted { opacity: 0.85; }
+    .small { font-size: 12px; opacity: 0.8; }
+    .metric { font-size: 22px; font-weight: 900; }
 
-.small { font-size: 12px; opacity: 0.8; }
-.metric {
-  font-size: 20px;
-  font-weight: 900;
-}
-</style>
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-disabled { background: #334155; color: #aab3c2; cursor: not-allowed; }
+
+    /* Leaflet popup text */
+    .leaflet-popup-content-wrapper {
+      background: #0b1220;
+      color: white;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .leaflet-popup-tip {
+      background: #0b1220;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      #map, .panel {
+        height: 48vh;
+      }
+    }
+  </style>
 </head>
 
 <body>
-
-<header>
-  <h2>Authority Dashboard</h2>
-  <button class="logout" onclick="logout()">Logout</button>
-</header>
-
-<div class="tabs">
-  <button class="tab-btn active" onclick="showTab('live', event)">Live Status & Alerts</button>
-  <button class="tab-btn" onclick="showTab('analytics', event)">Analytics & Reports</button>
-</div>
-
-<!-- LIVE STATUS -->
-<div id="live" class="section active">
-
-  <div class="card">
+  <header>
+    <h2>Authority Dashboard — Live Map</h2>
     <div class="row">
-      <div>
-        <h3 style="margin:0">Live Station Status</h3>
-        <div class="small">Stations sorted by priority (highest fill first)</div>
-      </div>
-      <button onclick="loadStations()">Refresh</button>
+      <button class="refresh" onclick="refreshStations()">Refresh</button>
+      <button class="logout" onclick="logout()">Logout</button>
     </div>
-    <div style="height:10px"></div>
-    <div id="stationList">Loading...</div>
-  </div>
+  </header>
 
-</div>
+  <div class="layout">
+    <div id="map"></div>
 
-<!-- ANALYTICS -->
-<div id="analytics" class="section">
-
-  <div class="card">
-    <h3>System Overview</h3>
-    <div class="row">
-      <div>
-        <div class="small">Total Stations</div>
-        <div id="totalStations" class="metric">0</div>
+    <div class="panel">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="small">Total Stations</div>
+            <div id="totalStations" class="metric">0</div>
+          </div>
+          <div>
+            <div class="small">Alerts (80%+)</div>
+            <div id="alertStations" class="metric">0</div>
+          </div>
+          <div>
+            <div class="small">Locked (95%+)</div>
+            <div id="lockedStations" class="metric">0</div>
+          </div>
+        </div>
       </div>
-      <div>
-        <div class="small">Alerts (80%+)</div>
-        <div id="alertCount" class="metric">0</div>
+
+      <div class="card" id="detailsCard">
+        <div class="muted">Click a station marker on the map to view details here.</div>
       </div>
-      <div>
-        <div class="small">Locked (95%+)</div>
-        <div id="lockedCount" class="metric">0</div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <b>Prioritized Pickup List</b>
+            <div class="small">Highest fill first</div>
+          </div>
+        </div>
+        <div id="pickupList" class="small" style="margin-top:10px;">Loading…</div>
       </div>
     </div>
   </div>
-
-  <div class="card">
-    <h3>Feedback Reports</h3>
-    <div id="feedbackList">Loading...</div>
-  </div>
-
-</div>
 
 <script>
+  // ===== MAP INIT =====
+  const DEFAULT_CENTER = [26.4205, 50.0888]; // Dammam-ish, adjust as needed
+  const DEFAULT_ZOOM = 15;
 
-function showTab(id, ev){
-  document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  ev.target.classList.add('active');
+  const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
-  if(id === 'analytics') loadAnalytics();
-}
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 20,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
 
-async function logout(){
-  await fetch('/api/auth/logout',{method:'POST'});
-  location.href='/';
-}
+  // Keep markers by stationId
+  const markers = new Map();
+  let lastStations = [];
 
-function getStatus(fill, locked){
-  if(locked || fill >= 95) return {text:"LOCKED", cls:"red"};
-  if(fill >= 80) return {text:"ALERT", cls:"yellow"};
-  return {text:"OK", cls:"green"};
-}
-
-async function loadStations(){
-  const list = document.getElementById('stationList');
-  list.textContent = "Loading...";
-
-  const res = await fetch('/api/v1/stations');
-  const data = await res.json();
-  const stations = data.stations || [];
-
-  // Sort highest fill first
-  stations.sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
-
-  list.innerHTML = "";
-
-  stations.forEach(s=>{
-    const status = getStatus(s.fillPct||0, s.locked);
-
-    const div = document.createElement('div');
-    div.className = "station-card";
-
-    div.innerHTML = `
-      <div class="row">
-        <div>
-          <b>${s.name}</b><br>
-          <span class="small">ID: ${s.id}</span>
-        </div>
-        <span class="badge ${status.cls}">${status.text}</span>
-      </div>
-
-      <div style="height:8px"></div>
-
-      Fill Level: <b>${s.fillPct||0}%</b><br>
-      Odor Alert: <b>${s.odorAlert ? "YES" : "NO"}</b><br>
-      Last Seen: <span class="small">${s.lastSeen||"—"}</span>
-
-      <div style="height:10px"></div>
-
-      <button onclick="markEmptied('${s.id}')">Mark Emptied</button>
-    `;
-
-    list.appendChild(div);
-  });
-}
-
-async function markEmptied(id){
-  await fetch(`/api/v1/stations/${id}/mark-emptied`, {
-    method: "POST"
-  });
-  loadStations();
-  loadAnalytics();
-}
-
-async function loadAnalytics(){
-  const res = await fetch('/api/v1/stations');
-  const data = await res.json();
-  const stations = data.stations || [];
-
-  document.getElementById('totalStations').textContent = stations.length;
-
-  const alerts = stations.filter(s => (s.fillPct||0) >= 80);
-  document.getElementById('alertCount').textContent = alerts.length;
-
-  const locked = stations.filter(s => s.locked || (s.fillPct||0) >= 95);
-  document.getElementById('lockedCount').textContent = locked.length;
-
-  loadFeedback();
-}
-
-async function loadFeedback(){
-  const res = await fetch('/api/auth/me');
-  const me = await res.json();
-
-  const list = document.getElementById('feedbackList');
-  list.innerHTML = "Loading...";
-
-  const dbRes = await fetch('/api/v1/stations'); // trigger auth check
-  if(!dbRes.ok){
-    list.textContent = "Unauthorized";
-    return;
+  function getStatus(fillPct, locked) {
+    const fill = typeof fillPct === "number" ? fillPct : 0;
+    if (locked || fill >= 95) return { label: "LOCKED", cls: "red", color: "#ef4444" };
+    if (fill >= 80) return { label: "ALERT", cls: "yellow", color: "#facc15" };
+    return { label: "OK", cls: "green", color: "#22c55e" };
   }
 
-  // We don't have a GET feedback route yet; simulate display
-  list.innerHTML = "<div class='small'>Feedback data available in backend (can add GET route if needed).</div>";
-}
+  function makeDotIcon(color) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:14px;height:14px;border-radius:50%;
+          background:${color};
+          border:2px solid rgba(255,255,255,0.9);
+          box-shadow:0 0 0 6px rgba(255,255,255,0.08);
+        "></div>
+      `,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+  }
 
-// Auto-refresh every 15 seconds
-setInterval(loadStations,15000);
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    location.href = '/';
+  }
 
-loadStations();
+  async function markEmptied(stationId) {
+    await fetch(`/api/v1/stations/${stationId}/mark-emptied`, { method: "POST" });
+    await refreshStations();
+  }
 
+  function renderDetails(station) {
+    const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+    const locked = !!station.locked;
+    const st = getStatus(fill, locked);
+
+    const details = document.getElementById("detailsCard");
+    details.innerHTML = `
+      <div class="row">
+        <div>
+          <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
+          <div class="small">ID: ${station.id}</div>
+        </div>
+        <span class="badge ${st.cls}">${st.label}</span>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="muted">
+        Fill: <b>${fill}%</b><br/>
+        Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
+        Last Seen: <span class="small">${station.lastSeen || "—"}</span><br/>
+        Last Emptied: <span class="small">${station.lastEmptiedAt || "—"}</span><br/>
+        Location: <span class="small">${(station.lat ?? 0).toFixed(5)}, ${(station.lng ?? 0).toFixed(5)}</span>
+      </div>
+
+      <div style="height:12px"></div>
+      <button class="${locked ? "btn-disabled" : "btn-primary"}"
+        ${locked ? "disabled" : ""} onclick="markEmptied('${station.id}')">
+        Mark Emptied
+      </button>
+      <div class="small" style="margin-top:8px;opacity:0.75">
+        Mark Emptied resets fill to 0% and clears odor/lock flags.
+      </div>
+    `;
+  }
+
+  function renderPickupList(stations) {
+    const list = document.getElementById("pickupList");
+    const sorted = stations.slice().sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
+
+    if (!sorted.length) {
+      list.textContent = "No stations found.";
+      return;
+    }
+
+    list.innerHTML = "";
+    sorted.slice(0, 12).forEach((s, idx) => {
+      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
+      const st = getStatus(fill, !!s.locked);
+
+      const row = document.createElement("div");
+      row.style.padding = "10px";
+      row.style.borderRadius = "10px";
+      row.style.marginBottom = "8px";
+      row.style.border = "1px solid rgba(255,255,255,0.08)";
+      row.style.background = "#111827";
+      row.style.cursor = "pointer";
+
+      row.innerHTML = `
+        <div class="row">
+          <div>
+            <b>${idx+1}. ${s.name || s.id}</b><br/>
+            <span class="small">Fill: ${fill}% • Odor: ${s.odorAlert ? "YES" : "NO"}</span>
+          </div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      `;
+
+      row.onclick = () => {
+        const m = markers.get(s.id);
+        if (m) {
+          map.setView(m.getLatLng(), Math.max(map.getZoom(), 16));
+          m.openPopup();
+        }
+        renderDetails(s);
+      };
+
+      list.appendChild(row);
+    });
+  }
+
+  function updateStats(stations) {
+    document.getElementById("totalStations").textContent = stations.length;
+
+    const alerts = stations.filter(s => (s.fillPct||0) >= 80);
+    document.getElementById("alertStations").textContent = alerts.length;
+
+    const locked = stations.filter(s => s.locked || (s.fillPct||0) >= 95);
+    document.getElementById("lockedStations").textContent = locked.length;
+  }
+
+  function upsertMarkers(stations) {
+    const seen = new Set();
+
+    stations.forEach(station => {
+      const id = station.id;
+      seen.add(id);
+
+      const lat = Number(station.lat);
+      const lng = Number(station.lng);
+
+      // ignore invalid coords (0,0) or NaN
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+        return;
+      }
+
+      const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+      const st = getStatus(fill, !!station.locked);
+
+      const popupHtml = `
+        <div style="min-width:220px">
+          <div style="font-weight:900">${station.name || station.id}</div>
+          <div style="font-size:12px;opacity:0.8">ID: ${station.id}</div>
+          <div style="margin-top:8px;font-size:13px">
+            Fill: <b>${fill}%</b><br/>
+            Odor: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
+            Status: <b>${st.label}</b><br/>
+            Last Seen: <span style="font-size:12px;opacity:0.8">${station.lastSeen || "—"}</span>
+          </div>
+          <div style="margin-top:10px">
+            <button style="
+              padding:8px 10px;border:none;border-radius:10px;
+              background:#3b82f6;color:white;font-weight:900;cursor:pointer;
+            " onclick="markEmptied('${station.id}')">Mark Emptied</button>
+          </div>
+        </div>
+      `;
+
+      if (!markers.has(id)) {
+        const marker = L.marker([lat, lng], { icon: makeDotIcon(st.color) }).addTo(map);
+        marker.bindPopup(popupHtml);
+
+        marker.on("click", () => {
+          renderDetails(station);
+        });
+
+        markers.set(id, marker);
+      } else {
+        const marker = markers.get(id);
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(makeDotIcon(st.color));
+        marker.setPopupContent(popupHtml);
+      }
+    });
+
+    // remove markers that no longer exist
+    for (const [id, marker] of markers.entries()) {
+      if (!seen.has(id)) {
+        map.removeLayer(marker);
+        markers.delete(id);
+      }
+    }
+  }
+
+  async function refreshStations() {
+    try {
+      const res = await fetch("/api/v1/stations");
+      const data = await res.json();
+      const stations = data.stations || [];
+      lastStations = stations;
+
+      updateStats(stations);
+      renderPickupList(stations);
+      upsertMarkers(stations);
+
+      // Optional: fit bounds first time only
+      if (stations.length && !window.__didFitBounds) {
+        const coords = stations
+          .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+          .map(s => [Number(s.lat), Number(s.lng)]);
+
+        if (coords.length >= 2) {
+          const bounds = L.latLngBounds(coords);
+          map.fitBounds(bounds.pad(0.2));
+          window.__didFitBounds = true;
+        }
+      }
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // Auto refresh every 15s
+  setInterval(refreshStations, 15000);
+
+  refreshStations();
 </script>
-
 </body>
 </html>
