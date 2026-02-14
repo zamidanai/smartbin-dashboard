@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Residents Portal</title>
 
-  <!-- QR scanner library -->
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- QR scanner -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
   <style>
@@ -22,15 +26,16 @@
       justify-content: space-between;
       align-items: center;
     }
-    header h2 { margin: 0; font-size: 18px; }
+    header h2 { margin: 0; font-size: 18px; font-weight: 900; }
     button {
       padding: 10px 14px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
-      font-weight: 800;
+      font-weight: 900;
     }
     .logout { background: #ef4444; color: white; }
+    .btn-link { background: #334155; color: white; }
 
     .tabs {
       display: flex;
@@ -42,23 +47,18 @@
     .tab-btn { background: #1f2937; color: white; white-space: nowrap; }
     .tab-btn.active { background: #22c55e; color: #07130a; }
 
-    .section { display: none; padding: 20px; }
+    .section { display: none; padding: 16px; }
     .section.active { display: block; }
 
     .card {
       background: #1e293b;
-      padding: 20px;
+      padding: 16px;
       border-radius: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
     }
-
-    .station-card {
-      margin-bottom: 15px;
-      padding: 12px;
-      border-radius: 10px;
-      background: #111827;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
+    .muted { opacity: 0.85; font-size: 14px; }
+    .small { font-size: 12px; opacity: 0.8; }
 
     .row {
       display: flex;
@@ -75,14 +75,25 @@
       font-size: 12px;
       font-weight: 900;
     }
-    .badge.green { background: rgba(34,197,94,0.18); color: #22c55e; }
-    .badge.yellow { background: rgba(250,204,21,0.18); color: #facc15; }
-    .badge.red { background: rgba(239,68,68,0.18); color: #ef4444; }
+    .green { background: rgba(34,197,94,0.18); color: #22c55e; }
+    .yellow { background: rgba(250,204,21,0.18); color: #facc15; }
+    .red { background: rgba(239,68,68,0.18); color: #ef4444; }
 
-    .muted { opacity: 0.85; font-size: 14px; }
-    .small { font-size: 12px; opacity: 0.8; }
+    #residentMap {
+      height: 48vh;
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      overflow: hidden;
+    }
 
-    .btn-link { background: #334155; color: white; font-weight: 800; }
+    .station-card {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #111827;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
 
     input, select, textarea {
       width: 100%;
@@ -95,16 +106,26 @@
       margin-top: 8px;
       box-sizing: border-box;
     }
-    label { font-weight: 800; display: block; margin-top: 12px; }
+    label { font-weight: 900; display: block; margin-top: 12px; }
 
     .success { color: #22c55e; font-weight: 900; }
     .error { color: #ef4444; font-weight: 900; }
+
+    /* Leaflet popup theme */
+    .leaflet-popup-content-wrapper {
+      background: #0b1220;
+      color: white;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .leaflet-popup-tip { background: #0b1220; }
 
     #qr-reader {
       width: 100%;
       max-width: 420px;
       margin-top: 10px;
     }
+
     .pill {
       display: inline-block;
       padding: 6px 10px;
@@ -113,7 +134,7 @@
       margin-right: 8px;
       margin-top: 8px;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 900;
     }
   </style>
 </head>
@@ -131,19 +152,29 @@
     <button class="tab-btn" onclick="showTab('report', event)">Report / Feedback</button>
   </div>
 
-  <!-- Nearby Stations -->
+  <!-- Nearby Stations (MAP FIRST) -->
   <div id="nearby" class="section active">
     <div class="card">
       <div class="row">
         <div>
-          <h3 style="margin:0">Nearby Stations</h3>
-          <div class="muted">Test data from <code>/api/v1/stations</code></div>
+          <h3 style="margin:0">Nearby Stations (Map)</h3>
+          <div class="muted">Tap a marker to view details & directions.</div>
         </div>
-        <button class="btn-link" onclick="loadStations()">Refresh</button>
+        <button class="btn-link" onclick="refreshStations()">Refresh</button>
       </div>
 
-      <div style="height:12px"></div>
-      <div id="stationList" class="muted">Loading stations…</div>
+      <div style="height:10px"></div>
+      <div id="residentMap"></div>
+
+      <div class="station-card" id="stationDetails">
+        <div class="muted">Click a station marker to see details.</div>
+      </div>
+
+      <div class="station-card">
+        <b>Nearest Stations</b>
+        <div class="small">Sorted by distance (if GPS allowed)</div>
+        <div id="nearestList" class="small" style="margin-top:10px;">Loading…</div>
+      </div>
     </div>
   </div>
 
@@ -177,25 +208,20 @@
             <span class="pill" id="tierPill">Tier: —</span>
           </div>
         </div>
-        <div class="small">Earn points when you recycle at a station. (Anti-abuse: 1 scan per station per hour)</div>
+        <div class="small">Anti-abuse: 1 scan per station per hour.</div>
       </div>
 
-      <!-- Camera QR Scan -->
       <div class="station-card">
         <b>Scan QR Code (Phone Camera)</b>
-        <div class="muted small">QR should contain the station ID text (example: <code>station1</code>).</div>
-
+        <div class="muted small">QR should contain station ID (example: <code>station1</code>).</div>
         <div id="qr-reader"></div>
-
         <div class="row" style="margin-top:10px">
           <button class="btn-link" onclick="startQR()">Start Camera</button>
           <button class="btn-link" onclick="stopQR()">Stop Camera</button>
         </div>
-
         <div id="qrMsg" class="small" style="margin-top:10px"></div>
       </div>
 
-      <!-- Manual Scan fallback -->
       <div class="station-card">
         <label>Manual Scan (Fallback)</label>
         <select id="rewardStationSelect"></select>
@@ -203,7 +229,6 @@
         <div id="scanMsg" class="small" style="margin-top:8px"></div>
       </div>
 
-      <!-- Redeem -->
       <div class="station-card">
         <b>Redeem Discounts</b>
         <div class="muted small">Redeem points for coupons (prototype partners).</div>
@@ -211,13 +236,11 @@
         <div id="redeemMsg" class="small" style="margin-top:10px"></div>
       </div>
 
-      <!-- Leaderboard -->
       <div class="station-card">
         <b>Leaderboard (Top 10)</b>
         <div id="leaderboard" class="small" style="margin-top:10px">Loading…</div>
       </div>
 
-      <!-- History -->
       <div class="station-card">
         <b>Reward History</b>
         <div id="rewardHistory" class="small" style="margin-top:10px">Loading…</div>
@@ -225,7 +248,7 @@
     </div>
   </div>
 
-  <!-- Report / Feedback -->
+  <!-- Report -->
   <div id="report" class="section">
     <div class="card">
       <h3>Report / Feedback</h3>
@@ -256,362 +279,516 @@
     </div>
   </div>
 
-  <script>
-    // ===== Tabs / Auth =====
-    function showTab(id, ev) {
-      document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
-      document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
-      document.getElementById(id).classList.add("active");
-      if (ev && ev.target) ev.target.classList.add("active");
+<script>
+  // ===== Tabs / Auth =====
+  function showTab(id, ev) {
+    document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    if (ev && ev.target) ev.target.classList.add("active");
 
-      if (id === "rewards") {
-        loadRewardsAll();
-      }
-    }
+    if (id === "rewards") loadRewardsAll();
+    if (id === "nearby") setTimeout(() => { if (residentMap) residentMap.invalidateSize(); }, 150);
+  }
 
-    async function logout() {
-      await fetch("/api/auth/logout", { method: "POST" });
-      location.href = "/";
-    }
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    location.href = "/";
+  }
 
-    // ===== Stations =====
-    function statusBadge(fillPct, locked) {
-      if (locked || fillPct >= 95) return { cls: "red", text: "FULL / LOCKED" };
-      if (fillPct >= 80) return { cls: "yellow", text: "ALERT" };
-      return { cls: "green", text: "OK" };
-    }
+  // ===== Map Setup =====
+  const DEFAULT_CENTER = [26.4205, 50.0888];
+  const DEFAULT_ZOOM = 15;
 
-    async function loadStations() {
-      const list = document.getElementById("stationList");
-      list.textContent = "Loading stations…";
+  let residentMap = null;
+  let markers = new Map();
+  let userMarker = null;
+  let userPos = null;
+  let lastStations = [];
 
-      try {
-        const res = await fetch("/api/v1/stations");
-        const data = await res.json();
+  function getStatus(fillPct, locked) {
+    const fill = typeof fillPct === "number" ? fillPct : 0;
+    if (locked || fill >= 95) return { label: "LOCKED", cls: "red", color: "#ef4444" };
+    if (fill >= 80) return { label: "ALERT", cls: "yellow", color: "#facc15" };
+    return { label: "OK", cls: "green", color: "#22c55e" };
+  }
 
-        const stations = data.stations || [];
-        if (stations.length === 0) {
-          list.innerHTML = `<div class="muted">No stations found. Add fake stations in <code>db.json</code>.</div>`;
-          return;
-        }
+  function makeDotIcon(color) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:14px;height:14px;border-radius:50%;
+          background:${color};
+          border:2px solid rgba(255,255,255,0.9);
+          box-shadow:0 0 0 6px rgba(255,255,255,0.08);
+        "></div>
+      `,
+      iconSize: [14,14],
+      iconAnchor: [7,7]
+    });
+  }
 
-        // Report dropdown
-        const stationSelect = document.getElementById("stationId");
-        stationSelect.innerHTML = `<option value="">(Optional) Select a station</option>`;
-        stations.forEach(s => {
-          const opt = document.createElement("option");
-          opt.value = s.id;
-          opt.textContent = `${s.name || s.id} (${typeof s.fillPct === "number" ? s.fillPct : 0}%)`;
-          stationSelect.appendChild(opt);
-        });
+  function initMap() {
+    if (residentMap) return;
 
-        // Rewards manual dropdown
-        const rewardSelect = document.getElementById("rewardStationSelect");
-        rewardSelect.innerHTML = "";
-        stations.forEach(s => {
-          const opt = document.createElement("option");
-          opt.value = s.id;
-          opt.textContent = s.name || s.id;
-          rewardSelect.appendChild(opt);
-        });
+    residentMap = L.map("residentMap").setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      attribution: "© OpenStreetMap"
+    }).addTo(residentMap);
 
-        // Render stations
-        list.innerHTML = "";
-        stations.forEach(station => {
-          const fillPct = typeof station.fillPct === "number" ? station.fillPct : 0;
-          const locked = !!station.locked;
-          const b = statusBadge(fillPct, locked);
+    // Try GPS for residents
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          residentMap.setView([userPos.lat, userPos.lng], 16);
 
-          const div = document.createElement("div");
-          div.className = "station-card";
-          div.innerHTML = `
-            <div class="row">
-              <div>
-                <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
-                <div class="small">ID: ${station.id}</div>
-              </div>
-              <span class="badge ${b.cls}">${b.text}</span>
-            </div>
-
-            <div style="height:10px"></div>
-
-            <div class="muted">
-              Fill Level: <b>${fillPct}%</b><br/>
-              Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
-              Access: <b>${locked ? "LOCKED" : "AVAILABLE"}</b>
-            </div>
-
-            <div style="height:10px"></div>
-            <div class="small">Last Seen: ${station.lastSeen || "—"}</div>
-          `;
-          list.appendChild(div);
-        });
-      } catch (err) {
-        list.innerHTML = `<div class="error">Failed to load stations: ${err.message}</div>`;
-      }
-    }
-
-    // ===== Feedback =====
-    async function submitFeedback() {
-      const msg = document.getElementById("feedbackMsg");
-      msg.textContent = "";
-      msg.className = "";
-
-      const stationId = document.getElementById("stationId").value || null;
-      const issueType = document.getElementById("issueType").value;
-      const note = document.getElementById("note").value || "";
-
-      try {
-        const res = await fetch("/api/v1/feedback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stationId, issueType, note })
-        });
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit");
-
-        msg.className = "success";
-        msg.textContent = "Submitted. Thank you!";
-        document.getElementById("note").value = "";
-      } catch (err) {
-        msg.className = "error";
-        msg.textContent = "Error: " + err.message;
-      }
-    }
-
-    // ===== Rewards =====
-    function calcTier(points) {
-      if (points >= 500) return "Gold";
-      if (points >= 200) return "Silver";
-      return "Bronze";
-    }
-
-    async function loadRewardsAll() {
-      await Promise.all([
-        loadBalance(),
-        loadHistory(),
-        loadLeaderboard(),
-        loadCatalog()
-      ]);
-    }
-
-    async function loadBalance() {
-      const balanceEl = document.getElementById("pointsBalance");
-      const tierEl = document.getElementById("tierPill");
-
-      balanceEl.textContent = "Loading…";
-      tierEl.textContent = "Tier: —";
-
-      const res = await fetch("/api/rewards/balance");
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        balanceEl.textContent = "—";
-        return;
-      }
-
-      balanceEl.textContent = `${data.points} points`;
-      tierEl.textContent = `Tier: ${calcTier(data.points)}`;
-    }
-
-    async function loadHistory() {
-      const historyEl = document.getElementById("rewardHistory");
-      historyEl.textContent = "Loading…";
-
-      const res = await fetch("/api/rewards/history");
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        historyEl.textContent = "Error loading history.";
-        return;
-      }
-
-      const h = data.history || [];
-      if (!h.length) {
-        historyEl.textContent = "No activity yet.";
-        return;
-      }
-
-      historyEl.innerHTML = "";
-      h.slice(0, 25).forEach(item => {
-        const dt = item.createdAt ? new Date(item.createdAt).toLocaleString() : "";
-        let line = "";
-
-        if (item.type === "reward_scan") {
-          line = `+${item.points} points • Scan • ${item.stationId} • ${dt}`;
-        } else if (item.type === "reward_redeem") {
-          line = `${item.points} points • Redeem • ${item.rewardName} • Coupon: ${item.coupon} • ${dt}`;
-        } else {
-          line = `${item.type} • ${dt}`;
-        }
-
-        const row = document.createElement("div");
-        row.textContent = line;
-        historyEl.appendChild(row);
-      });
-    }
-
-    async function loadLeaderboard() {
-      const div = document.getElementById("leaderboard");
-      div.textContent = "Loading…";
-
-      const res = await fetch("/api/rewards/leaderboard");
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        div.textContent = "Error loading leaderboard.";
-        return;
-      }
-
-      const lb = data.leaderboard || [];
-      if (!lb.length) {
-        div.textContent = "No users yet.";
-        return;
-      }
-
-      div.innerHTML = "";
-      lb.forEach((u, i) => {
-        const row = document.createElement("div");
-        row.textContent = `${i + 1}. ${u.name} — ${u.points} pts`;
-        div.appendChild(row);
-      });
-    }
-
-    async function loadCatalog() {
-      const div = document.getElementById("redeemList");
-      div.textContent = "Loading…";
-
-      const res = await fetch("/api/rewards/catalog");
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        div.textContent = "Error loading catalog.";
-        return;
-      }
-
-      const catalog = data.catalog || [];
-      if (!catalog.length) {
-        div.textContent = "No rewards available.";
-        return;
-      }
-
-      div.innerHTML = "";
-      catalog.forEach(r => {
-        const card = document.createElement("div");
-        card.className = "station-card";
-        card.style.marginBottom = "10px";
-
-        card.innerHTML = `
-          <div class="row">
-            <div>
-              <div style="font-weight:900">${r.name}</div>
-              <div class="small">Partner: ${r.partner || "—"}</div>
-            </div>
-            <div style="font-weight:900">${r.cost} pts</div>
-          </div>
-          <button class="btn-link" style="margin-top:10px" onclick="redeemReward('${r.id}')">
-            Redeem
-          </button>
-        `;
-        div.appendChild(card);
-      });
-    }
-
-    async function redeemReward(rewardId) {
-      const msg = document.getElementById("redeemMsg");
-      msg.textContent = "";
-
-      const res = await fetch("/api/rewards/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rewardId })
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.ok) {
-        msg.textContent = `❌ ${data.error || "Redeem failed"}`;
-        return;
-      }
-
-      msg.textContent = `✅ Redeemed! Coupon: ${data.coupon} (New Balance: ${data.newBalance})`;
-      await loadRewardsAll();
-    }
-
-    // ---- Scanning (manual + camera) ----
-    async function scanStationManual() {
-      const stationId = document.getElementById("rewardStationSelect").value;
-      return scanStationId(stationId, "scanMsg");
-    }
-
-    async function scanStationId(stationId, msgElId) {
-      const msg = document.getElementById(msgElId);
-      msg.textContent = "";
-
-      if (!stationId) {
-        msg.textContent = "Select/scan a station first.";
-        return;
-      }
-
-      const res = await fetch("/api/rewards/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stationId })
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.ok) {
-        msg.textContent = `❌ ${data.error || "Scan failed"}`;
-        return;
-      }
-
-      msg.textContent = `✅ +${data.added} points! New balance: ${data.newBalance}`;
-      await loadRewardsAll();
-    }
-
-    let qrScanner = null;
-
-    function startQR() {
-      const msg = document.getElementById("qrMsg");
-      msg.textContent = "";
-
-      if (qrScanner) {
-        msg.textContent = "Camera already running.";
-        return;
-      }
-
-      qrScanner = new Html5Qrcode("qr-reader");
-      qrScanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        async (decodedText) => {
-          // We expect decodedText to be stationId (e.g. "station1")
-          await scanStationId(decodedText.trim(), "qrMsg");
-          stopQR();
+          userMarker = L.circleMarker([userPos.lat, userPos.lng], {
+            radius: 7,
+            color: "#60a5fa",
+            fillColor: "#60a5fa",
+            fillOpacity: 0.8
+          }).addTo(residentMap).bindPopup("You are here");
+          refreshStations();
         },
-        (errorMessage) => {
-          // ignore scan errors to avoid spam
+        () => {
+          // GPS denied; still load stations
+          refreshStations();
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    } else {
+      refreshStations();
+    }
+  }
+
+  function renderDetails(station) {
+    const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+    const st = getStatus(fill, !!station.locked);
+
+    const details = document.getElementById("stationDetails");
+
+    const directionsUrl =
+      `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+
+    details.innerHTML = `
+      <div class="row">
+        <div>
+          <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
+          <div class="small">ID: ${station.id}</div>
+        </div>
+        <span class="badge ${st.cls}">${st.label}</span>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="muted">
+        Fill: <b>${fill}%</b><br/>
+        Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
+        Access: <b>${station.locked ? "LOCKED" : "AVAILABLE"}</b><br/>
+        Last Seen: <span class="small">${station.lastSeen || "—"}</span>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="row">
+        <a href="${directionsUrl}" target="_blank" style="text-decoration:none">
+          <button class="btn-link">Directions</button>
+        </a>
+        <button class="btn-link" onclick="openRewardsAndSelect('${station.id}')">Scan / Rewards</button>
+      </div>
+    `;
+  }
+
+  function openRewardsAndSelect(stationId) {
+    document.getElementById("rewardStationSelect").value = stationId;
+    // switch to rewards tab
+    document.querySelectorAll(".tab-btn")[2].click();
+  }
+
+  function upsertMarkers(stations) {
+    const seen = new Set();
+
+    stations.forEach(station => {
+      const id = station.id;
+      seen.add(id);
+
+      const lat = Number(station.lat);
+      const lng = Number(station.lng);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
+
+      const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+      const st = getStatus(fill, !!station.locked);
+
+      const popupHtml = `
+        <div style="min-width:210px">
+          <div style="font-weight:900">${station.name || station.id}</div>
+          <div style="font-size:12px;opacity:0.8">ID: ${station.id}</div>
+          <div style="margin-top:8px;font-size:13px">
+            Fill: <b>${fill}%</b><br/>
+            Status: <b>${st.label}</b>
+          </div>
+        </div>
+      `;
+
+      if (!markers.has(id)) {
+        const marker = L.marker([lat, lng], { icon: makeDotIcon(st.color) }).addTo(residentMap);
+        marker.bindPopup(popupHtml);
+        marker.on("click", () => renderDetails(station));
+        markers.set(id, marker);
+      } else {
+        const marker = markers.get(id);
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(makeDotIcon(st.color));
+        marker.setPopupContent(popupHtml);
+      }
+    });
+
+    for (const [id, marker] of markers.entries()) {
+      if (!seen.has(id)) {
+        residentMap.removeLayer(marker);
+        markers.delete(id);
+      }
+    }
+  }
+
+  function haversineMeters(a, b) {
+    const R = 6371000;
+    const toRad = (x) => x * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const s =
+      Math.sin(dLat/2)**2 +
+      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  function renderNearest(stations) {
+    const list = document.getElementById("nearestList");
+
+    if (!stations.length) {
+      list.textContent = "No stations found.";
+      return;
+    }
+
+    let enriched = stations.map(s => {
+      let dist = null;
+      if (userPos && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) {
+        dist = haversineMeters(userPos, { lat: Number(s.lat), lng: Number(s.lng) });
+      }
+      return { ...s, dist };
+    });
+
+    enriched.sort((a,b) => {
+      if (a.dist === null && b.dist === null) return 0;
+      if (a.dist === null) return 1;
+      if (b.dist === null) return -1;
+      return a.dist - b.dist;
+    });
+
+    list.innerHTML = "";
+    enriched.slice(0, 8).forEach(s => {
+      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
+      const st = getStatus(fill, !!s.locked);
+
+      const div = document.createElement("div");
+      div.style.padding = "10px";
+      div.style.borderRadius = "10px";
+      div.style.border = "1px solid rgba(255,255,255,0.08)";
+      div.style.background = "#0b1220";
+      div.style.marginBottom = "8px";
+      div.style.cursor = "pointer";
+
+      const distTxt = (s.dist === null) ? "distance unavailable" :
+        (s.dist < 1000 ? `${Math.round(s.dist)} m` : `${(s.dist/1000).toFixed(2)} km`);
+
+      div.innerHTML = `
+        <div class="row">
+          <div>
+            <b>${s.name || s.id}</b><br/>
+            <span class="small">${distTxt} • Fill ${fill}%</span>
+          </div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      `;
+
+      div.onclick = () => {
+        const m = markers.get(s.id);
+        if (m) {
+          residentMap.setView(m.getLatLng(), Math.max(residentMap.getZoom(), 16));
+          m.openPopup();
         }
-      ).catch(err => {
-        msg.textContent = "❌ Camera failed: " + err;
-        qrScanner = null;
+        renderDetails(s);
+      };
+
+      list.appendChild(div);
+    });
+  }
+
+  async function refreshStations() {
+    try {
+      const res = await fetch("/api/v1/stations");
+      const data = await res.json();
+      const stations = data.stations || [];
+      lastStations = stations;
+
+      upsertMarkers(stations);
+      renderNearest(stations);
+
+      // Fill dropdowns that depend on stations
+      const reportSelect = document.getElementById("stationId");
+      reportSelect.innerHTML = `<option value="">(Optional) Select a station</option>`;
+      stations.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name || s.id} (${typeof s.fillPct === "number" ? s.fillPct : 0}%)`;
+        reportSelect.appendChild(opt);
       });
+
+      const rewardSelect = document.getElementById("rewardStationSelect");
+      rewardSelect.innerHTML = "";
+      stations.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.name || s.id;
+        rewardSelect.appendChild(opt);
+      });
+
+      // Fit bounds once (if no GPS)
+      if (!userPos && stations.length && !window.__didFitResidentBounds) {
+        const coords = stations
+          .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+          .map(s => [Number(s.lat), Number(s.lng)]);
+        if (coords.length >= 2) {
+          residentMap.fitBounds(L.latLngBounds(coords).pad(0.2));
+          window.__didFitResidentBounds = true;
+        }
+      }
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // Auto refresh every 20s
+  setInterval(refreshStations, 20000);
+
+  // ===== Rewards =====
+  function calcTier(points) {
+    if (points >= 500) return "Gold";
+    if (points >= 200) return "Silver";
+    return "Bronze";
+  }
+
+  async function loadRewardsAll() {
+    await Promise.all([
+      loadBalance(),
+      loadHistory(),
+      loadLeaderboard(),
+      loadCatalog()
+    ]);
+  }
+
+  async function loadBalance() {
+    const balanceEl = document.getElementById("pointsBalance");
+    const tierEl = document.getElementById("tierPill");
+    balanceEl.textContent = "Loading…";
+    tierEl.textContent = "Tier: —";
+
+    const res = await fetch("/api/rewards/balance");
+    const data = await res.json();
+    if (!res.ok || !data.ok) { balanceEl.textContent = "—"; return; }
+
+    balanceEl.textContent = `${data.points} points`;
+    tierEl.textContent = `Tier: ${calcTier(data.points)}`;
+  }
+
+  async function loadHistory() {
+    const historyEl = document.getElementById("rewardHistory");
+    historyEl.textContent = "Loading…";
+
+    const res = await fetch("/api/rewards/history");
+    const data = await res.json();
+    if (!res.ok || !data.ok) { historyEl.textContent = "Error loading history."; return; }
+
+    const h = data.history || [];
+    if (!h.length) { historyEl.textContent = "No activity yet."; return; }
+
+    historyEl.innerHTML = "";
+    h.slice(0, 25).forEach(item => {
+      const dt = item.createdAt ? new Date(item.createdAt).toLocaleString() : "";
+      let line = "";
+      if (item.type === "reward_scan") line = `+${item.points} points • Scan • ${item.stationId} • ${dt}`;
+      else if (item.type === "reward_redeem") line = `${item.points} points • Redeem • ${item.rewardName} • Coupon: ${item.coupon} • ${dt}`;
+      else line = `${item.type} • ${dt}`;
+      const row = document.createElement("div");
+      row.textContent = line;
+      historyEl.appendChild(row);
+    });
+  }
+
+  async function loadLeaderboard() {
+    const div = document.getElementById("leaderboard");
+    div.textContent = "Loading…";
+
+    const res = await fetch("/api/rewards/leaderboard");
+    const data = await res.json();
+    if (!res.ok || !data.ok) { div.textContent = "Error loading leaderboard."; return; }
+
+    const lb = data.leaderboard || [];
+    if (!lb.length) { div.textContent = "No users yet."; return; }
+
+    div.innerHTML = "";
+    lb.forEach((u, i) => {
+      const row = document.createElement("div");
+      row.textContent = `${i + 1}. ${u.name} — ${u.points} pts`;
+      div.appendChild(row);
+    });
+  }
+
+  async function loadCatalog() {
+    const div = document.getElementById("redeemList");
+    div.textContent = "Loading…";
+
+    const res = await fetch("/api/rewards/catalog");
+    const data = await res.json();
+    if (!res.ok || !data.ok) { div.textContent = "Error loading catalog."; return; }
+
+    const catalog = data.catalog || [];
+    if (!catalog.length) { div.textContent = "No rewards available."; return; }
+
+    div.innerHTML = "";
+    catalog.forEach(r => {
+      const card = document.createElement("div");
+      card.className = "station-card";
+      card.style.marginBottom = "10px";
+
+      card.innerHTML = `
+        <div class="row">
+          <div>
+            <div style="font-weight:900">${r.name}</div>
+            <div class="small">Partner: ${r.partner || "—"}</div>
+          </div>
+          <div style="font-weight:900">${r.cost} pts</div>
+        </div>
+        <button class="btn-link" style="margin-top:10px" onclick="redeemReward('${r.id}')">
+          Redeem
+        </button>
+      `;
+      div.appendChild(card);
+    });
+  }
+
+  async function redeemReward(rewardId) {
+    const msg = document.getElementById("redeemMsg");
+    msg.textContent = "";
+
+    const res = await fetch("/api/rewards/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rewardId })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      msg.textContent = `❌ ${data.error || "Redeem failed"}`;
+      return;
     }
 
-    function stopQR() {
-      const msg = document.getElementById("qrMsg");
-      if (!qrScanner) return;
+    msg.textContent = `✅ Redeemed! Coupon: ${data.coupon} (New Balance: ${data.newBalance})`;
+    await loadRewardsAll();
+  }
 
-      qrScanner.stop()
-        .then(() => {
-          qrScanner.clear();
-          qrScanner = null;
-          // Keep reader div; html5-qrcode manages it
-        })
-        .catch(() => {
-          qrScanner = null;
-          msg.textContent = "Stopped camera.";
-        });
+  async function scanStationManual() {
+    const stationId = document.getElementById("rewardStationSelect").value;
+    return scanStationId(stationId, "scanMsg");
+  }
+
+  async function scanStationId(stationId, msgElId) {
+    const msg = document.getElementById(msgElId);
+    msg.textContent = "";
+    if (!stationId) { msg.textContent = "Select/scan a station first."; return; }
+
+    const res = await fetch("/api/rewards/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stationId })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      msg.textContent = `❌ ${data.error || "Scan failed"}`;
+      return;
     }
 
-    // Initial load
-    loadStations();
-    loadRewardsAll();
-  </script>
+    msg.textContent = `✅ +${data.added} points! New balance: ${data.newBalance}`;
+    await loadRewardsAll();
+  }
+
+  let qrScanner = null;
+
+  function startQR() {
+    const msg = document.getElementById("qrMsg");
+    msg.textContent = "";
+    if (qrScanner) { msg.textContent = "Camera already running."; return; }
+
+    qrScanner = new Html5Qrcode("qr-reader");
+    qrScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      async (decodedText) => {
+        await scanStationId(decodedText.trim(), "qrMsg");
+        stopQR();
+      },
+      () => {}
+    ).catch(err => {
+      msg.textContent = "❌ Camera failed: " + err;
+      qrScanner = null;
+    });
+  }
+
+  function stopQR() {
+    if (!qrScanner) return;
+    qrScanner.stop().then(() => {
+      qrScanner.clear();
+      qrScanner = null;
+    }).catch(() => { qrScanner = null; });
+  }
+
+  // ===== Feedback =====
+  async function submitFeedback() {
+    const msg = document.getElementById("feedbackMsg");
+    msg.textContent = "";
+    msg.className = "";
+
+    const stationId = document.getElementById("stationId").value || null;
+    const issueType = document.getElementById("issueType").value;
+    const note = document.getElementById("note").value || "";
+
+    try {
+      const res = await fetch("/api/v1/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stationId, issueType, note })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit");
+
+      msg.className = "success";
+      msg.textContent = "Submitted. Thank you!";
+      document.getElementById("note").value = "";
+    } catch (err) {
+      msg.className = "error";
+      msg.textContent = "Error: " + err.message;
+    }
+  }
+
+  // Init
+  initMap();
+  loadRewardsAll();
+</script>
 </body>
 </html>
