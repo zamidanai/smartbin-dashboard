@@ -1,12 +1,272 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Authorities</title></head>
-<body style="font-family:system-ui;background:#0f172a;color:#fff;padding:18px">
-  <h2>Authorities UI</h2>
-  <p>Next: Live Status & Alerts + Analytics.</p>
-  <button onclick="logout()" style="padding:10px 14px;border-radius:10px;border:0;font-weight:800;cursor:pointer">Logout</button>
-  <script>
-    async function logout(){ await fetch("/api/auth/logout",{method:"POST"}); location.href="/"; }
-  </script>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Authority Dashboard</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: linear-gradient(135deg,#0f172a,#1e293b);
+  color: white;
+}
+
+header {
+  padding: 16px;
+  background: #0b1220;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.logout { background: #ef4444; color: white; }
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  padding: 16px;
+  background: #111827;
+}
+
+.tab-btn {
+  background: #1f2937;
+  color: white;
+}
+
+.tab-btn.active {
+  background: #3b82f6;
+}
+
+.section {
+  display: none;
+  padding: 20px;
+}
+
+.section.active {
+  display: block;
+}
+
+.card {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.station-card {
+  background: #111827;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.green { background: rgba(34,197,94,0.2); color: #22c55e; }
+.yellow { background: rgba(250,204,21,0.2); color: #facc15; }
+.red { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+.small { font-size: 12px; opacity: 0.8; }
+.metric {
+  font-size: 20px;
+  font-weight: 900;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>Authority Dashboard</h2>
+  <button class="logout" onclick="logout()">Logout</button>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('live', event)">Live Status & Alerts</button>
+  <button class="tab-btn" onclick="showTab('analytics', event)">Analytics & Reports</button>
+</div>
+
+<!-- LIVE STATUS -->
+<div id="live" class="section active">
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <h3 style="margin:0">Live Station Status</h3>
+        <div class="small">Stations sorted by priority (highest fill first)</div>
+      </div>
+      <button onclick="loadStations()">Refresh</button>
+    </div>
+    <div style="height:10px"></div>
+    <div id="stationList">Loading...</div>
+  </div>
+
+</div>
+
+<!-- ANALYTICS -->
+<div id="analytics" class="section">
+
+  <div class="card">
+    <h3>System Overview</h3>
+    <div class="row">
+      <div>
+        <div class="small">Total Stations</div>
+        <div id="totalStations" class="metric">0</div>
+      </div>
+      <div>
+        <div class="small">Alerts (80%+)</div>
+        <div id="alertCount" class="metric">0</div>
+      </div>
+      <div>
+        <div class="small">Locked (95%+)</div>
+        <div id="lockedCount" class="metric">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Feedback Reports</h3>
+    <div id="feedbackList">Loading...</div>
+  </div>
+
+</div>
+
+<script>
+
+function showTab(id, ev){
+  document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  ev.target.classList.add('active');
+
+  if(id === 'analytics') loadAnalytics();
+}
+
+async function logout(){
+  await fetch('/api/auth/logout',{method:'POST'});
+  location.href='/';
+}
+
+function getStatus(fill, locked){
+  if(locked || fill >= 95) return {text:"LOCKED", cls:"red"};
+  if(fill >= 80) return {text:"ALERT", cls:"yellow"};
+  return {text:"OK", cls:"green"};
+}
+
+async function loadStations(){
+  const list = document.getElementById('stationList');
+  list.textContent = "Loading...";
+
+  const res = await fetch('/api/v1/stations');
+  const data = await res.json();
+  const stations = data.stations || [];
+
+  // Sort highest fill first
+  stations.sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
+
+  list.innerHTML = "";
+
+  stations.forEach(s=>{
+    const status = getStatus(s.fillPct||0, s.locked);
+
+    const div = document.createElement('div');
+    div.className = "station-card";
+
+    div.innerHTML = `
+      <div class="row">
+        <div>
+          <b>${s.name}</b><br>
+          <span class="small">ID: ${s.id}</span>
+        </div>
+        <span class="badge ${status.cls}">${status.text}</span>
+      </div>
+
+      <div style="height:8px"></div>
+
+      Fill Level: <b>${s.fillPct||0}%</b><br>
+      Odor Alert: <b>${s.odorAlert ? "YES" : "NO"}</b><br>
+      Last Seen: <span class="small">${s.lastSeen||"—"}</span>
+
+      <div style="height:10px"></div>
+
+      <button onclick="markEmptied('${s.id}')">Mark Emptied</button>
+    `;
+
+    list.appendChild(div);
+  });
+}
+
+async function markEmptied(id){
+  await fetch(`/api/v1/stations/${id}/mark-emptied`, {
+    method: "POST"
+  });
+  loadStations();
+  loadAnalytics();
+}
+
+async function loadAnalytics(){
+  const res = await fetch('/api/v1/stations');
+  const data = await res.json();
+  const stations = data.stations || [];
+
+  document.getElementById('totalStations').textContent = stations.length;
+
+  const alerts = stations.filter(s => (s.fillPct||0) >= 80);
+  document.getElementById('alertCount').textContent = alerts.length;
+
+  const locked = stations.filter(s => s.locked || (s.fillPct||0) >= 95);
+  document.getElementById('lockedCount').textContent = locked.length;
+
+  loadFeedback();
+}
+
+async function loadFeedback(){
+  const res = await fetch('/api/auth/me');
+  const me = await res.json();
+
+  const list = document.getElementById('feedbackList');
+  list.innerHTML = "Loading...";
+
+  const dbRes = await fetch('/api/v1/stations'); // trigger auth check
+  if(!dbRes.ok){
+    list.textContent = "Unauthorized";
+    return;
+  }
+
+  // We don't have a GET feedback route yet; simulate display
+  list.innerHTML = "<div class='small'>Feedback data available in backend (can add GET route if needed).</div>";
+}
+
+// Auto-refresh every 15 seconds
+setInterval(loadStations,15000);
+
+loadStations();
+
+</script>
+
 </body>
 </html>
