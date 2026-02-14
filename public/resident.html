@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Residents Portal</title>
 
+  <!-- QR scanner library -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
   <style>
     body {
       margin: 0;
@@ -12,7 +15,6 @@
       background: linear-gradient(135deg, #0f172a, #1e293b);
       color: white;
     }
-
     header {
       padding: 16px;
       background: #0b1220;
@@ -20,24 +22,15 @@
       justify-content: space-between;
       align-items: center;
     }
-
-    header h2 {
-      margin: 0;
-      font-size: 18px;
-    }
-
+    header h2 { margin: 0; font-size: 18px; }
     button {
       padding: 10px 14px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-weight: 700;
+      font-weight: 800;
     }
-
-    .logout {
-      background: #ef4444;
-      color: white;
-    }
+    .logout { background: #ef4444; color: white; }
 
     .tabs {
       display: flex;
@@ -46,26 +39,11 @@
       background: #111827;
       overflow-x: auto;
     }
+    .tab-btn { background: #1f2937; color: white; white-space: nowrap; }
+    .tab-btn.active { background: #22c55e; color: #07130a; }
 
-    .tab-btn {
-      background: #1f2937;
-      color: white;
-      white-space: nowrap;
-    }
-
-    .tab-btn.active {
-      background: #22c55e;
-      color: #07130a;
-    }
-
-    .section {
-      display: none;
-      padding: 20px;
-    }
-
-    .section.active {
-      display: block;
-    }
+    .section { display: none; padding: 20px; }
+    .section.active { display: block; }
 
     .card {
       background: #1e293b;
@@ -95,9 +73,8 @@
       padding: 4px 10px;
       border-radius: 999px;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 900;
     }
-
     .badge.green { background: rgba(34,197,94,0.18); color: #22c55e; }
     .badge.yellow { background: rgba(250,204,21,0.18); color: #facc15; }
     .badge.red { background: rgba(239,68,68,0.18); color: #ef4444; }
@@ -105,11 +82,7 @@
     .muted { opacity: 0.85; font-size: 14px; }
     .small { font-size: 12px; opacity: 0.8; }
 
-    .btn-link {
-      background: #334155;
-      color: white;
-      font-weight: 700;
-    }
+    .btn-link { background: #334155; color: white; font-weight: 800; }
 
     input, select, textarea {
       width: 100%;
@@ -122,10 +95,26 @@
       margin-top: 8px;
       box-sizing: border-box;
     }
+    label { font-weight: 800; display: block; margin-top: 12px; }
 
-    label { font-weight: 700; display: block; margin-top: 12px; }
-    .success { color: #22c55e; font-weight: 700; }
-    .error { color: #ef4444; font-weight: 700; }
+    .success { color: #22c55e; font-weight: 900; }
+    .error { color: #ef4444; font-weight: 900; }
+
+    #qr-reader {
+      width: 100%;
+      max-width: 420px;
+      margin-top: 10px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      margin-right: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 800;
+    }
   </style>
 </head>
 
@@ -162,7 +151,7 @@
   <div id="sort" class="section">
     <div class="card">
       <h3>How to Sort</h3>
-      <div class="muted">Quick guide (you can replace with icons later):</div>
+      <div class="muted">Quick guide (replace with icons later):</div>
       <ul>
         <li><b>Plastic</b>: bottles, containers (empty + rinse if possible)</li>
         <li><b>Paper</b>: cardboard, clean paper (avoid greasy paper)</li>
@@ -177,14 +166,61 @@
   <div id="rewards" class="section">
     <div class="card">
       <h3>Rewards (QR)</h3>
-      <p class="muted">
-        For now this is a placeholder. Later we will add:
-        QR scan → points → history → discounts.
-      </p>
+
       <div class="station-card">
-        <div><b>Points Balance</b></div>
-        <div class="muted" id="pointsBalance">0</div>
-        <div class="small">(We’ll connect this to your user account later.)</div>
+        <div class="row">
+          <div>
+            <div><b>Points Balance</b></div>
+            <div id="pointsBalance" style="font-size:22px;font-weight:900">Loading…</div>
+          </div>
+          <div>
+            <span class="pill" id="tierPill">Tier: —</span>
+          </div>
+        </div>
+        <div class="small">Earn points when you recycle at a station. (Anti-abuse: 1 scan per station per hour)</div>
+      </div>
+
+      <!-- Camera QR Scan -->
+      <div class="station-card">
+        <b>Scan QR Code (Phone Camera)</b>
+        <div class="muted small">QR should contain the station ID text (example: <code>station1</code>).</div>
+
+        <div id="qr-reader"></div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn-link" onclick="startQR()">Start Camera</button>
+          <button class="btn-link" onclick="stopQR()">Stop Camera</button>
+        </div>
+
+        <div id="qrMsg" class="small" style="margin-top:10px"></div>
+      </div>
+
+      <!-- Manual Scan fallback -->
+      <div class="station-card">
+        <label>Manual Scan (Fallback)</label>
+        <select id="rewardStationSelect"></select>
+        <button class="btn-link" style="margin-top:10px" onclick="scanStationManual()">Scan (+10 points)</button>
+        <div id="scanMsg" class="small" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Redeem -->
+      <div class="station-card">
+        <b>Redeem Discounts</b>
+        <div class="muted small">Redeem points for coupons (prototype partners).</div>
+        <div id="redeemList" style="margin-top:10px">Loading…</div>
+        <div id="redeemMsg" class="small" style="margin-top:10px"></div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="station-card">
+        <b>Leaderboard (Top 10)</b>
+        <div id="leaderboard" class="small" style="margin-top:10px">Loading…</div>
+      </div>
+
+      <!-- History -->
+      <div class="station-card">
+        <b>Reward History</b>
+        <div id="rewardHistory" class="small" style="margin-top:10px">Loading…</div>
       </div>
     </div>
   </div>
@@ -221,11 +257,16 @@
   </div>
 
   <script>
+    // ===== Tabs / Auth =====
     function showTab(id, ev) {
       document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
       document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
       document.getElementById(id).classList.add("active");
       if (ev && ev.target) ev.target.classList.add("active");
+
+      if (id === "rewards") {
+        loadRewardsAll();
+      }
     }
 
     async function logout() {
@@ -233,8 +274,9 @@
       location.href = "/";
     }
 
-    function statusBadge(fillPct) {
-      if (fillPct >= 95) return { cls: "red", text: "FULL / LOCKED" };
+    // ===== Stations =====
+    function statusBadge(fillPct, locked) {
+      if (locked || fillPct >= 95) return { cls: "red", text: "FULL / LOCKED" };
       if (fillPct >= 80) return { cls: "yellow", text: "ALERT" };
       return { cls: "green", text: "OK" };
     }
@@ -253,29 +295,39 @@
           return;
         }
 
-        // Fill dropdown in Report tab
+        // Report dropdown
         const stationSelect = document.getElementById("stationId");
         stationSelect.innerHTML = `<option value="">(Optional) Select a station</option>`;
         stations.forEach(s => {
           const opt = document.createElement("option");
           opt.value = s.id;
-          opt.textContent = `${s.name} (${s.fillPct ?? 0}%)`;
+          opt.textContent = `${s.name || s.id} (${typeof s.fillPct === "number" ? s.fillPct : 0}%)`;
           stationSelect.appendChild(opt);
         });
 
-        // Render station cards
+        // Rewards manual dropdown
+        const rewardSelect = document.getElementById("rewardStationSelect");
+        rewardSelect.innerHTML = "";
+        stations.forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name || s.id;
+          rewardSelect.appendChild(opt);
+        });
+
+        // Render stations
         list.innerHTML = "";
         stations.forEach(station => {
           const fillPct = typeof station.fillPct === "number" ? station.fillPct : 0;
-          const b = statusBadge(fillPct);
+          const locked = !!station.locked;
+          const b = statusBadge(fillPct, locked);
 
           const div = document.createElement("div");
           div.className = "station-card";
-
           div.innerHTML = `
             <div class="row">
               <div>
-                <div style="font-weight:800;font-size:16px">${station.name || station.id}</div>
+                <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
                 <div class="small">ID: ${station.id}</div>
               </div>
               <span class="badge ${b.cls}">${b.text}</span>
@@ -286,24 +338,20 @@
             <div class="muted">
               Fill Level: <b>${fillPct}%</b><br/>
               Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
-              Access: <b>${station.locked ? "LOCKED" : "AVAILABLE"}</b>
+              Access: <b>${locked ? "LOCKED" : "AVAILABLE"}</b>
             </div>
 
             <div style="height:10px"></div>
-
-            <div class="small">
-              Last Seen: ${station.lastSeen ? station.lastSeen : "—"}
-            </div>
+            <div class="small">Last Seen: ${station.lastSeen || "—"}</div>
           `;
-
           list.appendChild(div);
         });
-
       } catch (err) {
         list.innerHTML = `<div class="error">Failed to load stations: ${err.message}</div>`;
       }
     }
 
+    // ===== Feedback =====
     async function submitFeedback() {
       const msg = document.getElementById("feedbackMsg");
       msg.textContent = "";
@@ -320,23 +368,250 @@
           body: JSON.stringify({ stationId, issueType, note })
         });
         const data = await res.json();
-
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || "Failed to submit");
-        }
+        if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit");
 
         msg.className = "success";
         msg.textContent = "Submitted. Thank you!";
         document.getElementById("note").value = "";
-
       } catch (err) {
         msg.className = "error";
         msg.textContent = "Error: " + err.message;
       }
     }
 
+    // ===== Rewards =====
+    function calcTier(points) {
+      if (points >= 500) return "Gold";
+      if (points >= 200) return "Silver";
+      return "Bronze";
+    }
+
+    async function loadRewardsAll() {
+      await Promise.all([
+        loadBalance(),
+        loadHistory(),
+        loadLeaderboard(),
+        loadCatalog()
+      ]);
+    }
+
+    async function loadBalance() {
+      const balanceEl = document.getElementById("pointsBalance");
+      const tierEl = document.getElementById("tierPill");
+
+      balanceEl.textContent = "Loading…";
+      tierEl.textContent = "Tier: —";
+
+      const res = await fetch("/api/rewards/balance");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        balanceEl.textContent = "—";
+        return;
+      }
+
+      balanceEl.textContent = `${data.points} points`;
+      tierEl.textContent = `Tier: ${calcTier(data.points)}`;
+    }
+
+    async function loadHistory() {
+      const historyEl = document.getElementById("rewardHistory");
+      historyEl.textContent = "Loading…";
+
+      const res = await fetch("/api/rewards/history");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        historyEl.textContent = "Error loading history.";
+        return;
+      }
+
+      const h = data.history || [];
+      if (!h.length) {
+        historyEl.textContent = "No activity yet.";
+        return;
+      }
+
+      historyEl.innerHTML = "";
+      h.slice(0, 25).forEach(item => {
+        const dt = item.createdAt ? new Date(item.createdAt).toLocaleString() : "";
+        let line = "";
+
+        if (item.type === "reward_scan") {
+          line = `+${item.points} points • Scan • ${item.stationId} • ${dt}`;
+        } else if (item.type === "reward_redeem") {
+          line = `${item.points} points • Redeem • ${item.rewardName} • Coupon: ${item.coupon} • ${dt}`;
+        } else {
+          line = `${item.type} • ${dt}`;
+        }
+
+        const row = document.createElement("div");
+        row.textContent = line;
+        historyEl.appendChild(row);
+      });
+    }
+
+    async function loadLeaderboard() {
+      const div = document.getElementById("leaderboard");
+      div.textContent = "Loading…";
+
+      const res = await fetch("/api/rewards/leaderboard");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        div.textContent = "Error loading leaderboard.";
+        return;
+      }
+
+      const lb = data.leaderboard || [];
+      if (!lb.length) {
+        div.textContent = "No users yet.";
+        return;
+      }
+
+      div.innerHTML = "";
+      lb.forEach((u, i) => {
+        const row = document.createElement("div");
+        row.textContent = `${i + 1}. ${u.name} — ${u.points} pts`;
+        div.appendChild(row);
+      });
+    }
+
+    async function loadCatalog() {
+      const div = document.getElementById("redeemList");
+      div.textContent = "Loading…";
+
+      const res = await fetch("/api/rewards/catalog");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        div.textContent = "Error loading catalog.";
+        return;
+      }
+
+      const catalog = data.catalog || [];
+      if (!catalog.length) {
+        div.textContent = "No rewards available.";
+        return;
+      }
+
+      div.innerHTML = "";
+      catalog.forEach(r => {
+        const card = document.createElement("div");
+        card.className = "station-card";
+        card.style.marginBottom = "10px";
+
+        card.innerHTML = `
+          <div class="row">
+            <div>
+              <div style="font-weight:900">${r.name}</div>
+              <div class="small">Partner: ${r.partner || "—"}</div>
+            </div>
+            <div style="font-weight:900">${r.cost} pts</div>
+          </div>
+          <button class="btn-link" style="margin-top:10px" onclick="redeemReward('${r.id}')">
+            Redeem
+          </button>
+        `;
+        div.appendChild(card);
+      });
+    }
+
+    async function redeemReward(rewardId) {
+      const msg = document.getElementById("redeemMsg");
+      msg.textContent = "";
+
+      const res = await fetch("/api/rewards/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rewardId })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        msg.textContent = `❌ ${data.error || "Redeem failed"}`;
+        return;
+      }
+
+      msg.textContent = `✅ Redeemed! Coupon: ${data.coupon} (New Balance: ${data.newBalance})`;
+      await loadRewardsAll();
+    }
+
+    // ---- Scanning (manual + camera) ----
+    async function scanStationManual() {
+      const stationId = document.getElementById("rewardStationSelect").value;
+      return scanStationId(stationId, "scanMsg");
+    }
+
+    async function scanStationId(stationId, msgElId) {
+      const msg = document.getElementById(msgElId);
+      msg.textContent = "";
+
+      if (!stationId) {
+        msg.textContent = "Select/scan a station first.";
+        return;
+      }
+
+      const res = await fetch("/api/rewards/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stationId })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        msg.textContent = `❌ ${data.error || "Scan failed"}`;
+        return;
+      }
+
+      msg.textContent = `✅ +${data.added} points! New balance: ${data.newBalance}`;
+      await loadRewardsAll();
+    }
+
+    let qrScanner = null;
+
+    function startQR() {
+      const msg = document.getElementById("qrMsg");
+      msg.textContent = "";
+
+      if (qrScanner) {
+        msg.textContent = "Camera already running.";
+        return;
+      }
+
+      qrScanner = new Html5Qrcode("qr-reader");
+      qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        async (decodedText) => {
+          // We expect decodedText to be stationId (e.g. "station1")
+          await scanStationId(decodedText.trim(), "qrMsg");
+          stopQR();
+        },
+        (errorMessage) => {
+          // ignore scan errors to avoid spam
+        }
+      ).catch(err => {
+        msg.textContent = "❌ Camera failed: " + err;
+        qrScanner = null;
+      });
+    }
+
+    function stopQR() {
+      const msg = document.getElementById("qrMsg");
+      if (!qrScanner) return;
+
+      qrScanner.stop()
+        .then(() => {
+          qrScanner.clear();
+          qrScanner = null;
+          // Keep reader div; html5-qrcode manages it
+        })
+        .catch(() => {
+          qrScanner = null;
+          msg.textContent = "Stopped camera.";
+        });
+    }
+
     // Initial load
     loadStations();
+    loadRewardsAll();
   </script>
 </body>
 </html>
