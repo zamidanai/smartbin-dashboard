@@ -1,813 +1,94 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Residents Portal</title>
+<meta charset="UTF-8">
+<title>Residents Map</title>
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
-  <!-- Heatmap -->
-  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
-  <!-- QR scanner -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      color: white;
-    }
-    header {
-      padding: 16px;
-      background: #0b1220;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    header h2 { margin: 0; font-size: 18px; font-weight: 900; }
-    button {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 900;
-      background: #334155;
-      color: white;
-    }
-    .logout { background: #ef4444; }
-    .tabs {
-      display: flex;
-      gap: 10px;
-      padding: 16px;
-      background: #111827;
-      overflow-x: auto;
-    }
-    .tab-btn { background: #1f2937; color: white; white-space: nowrap; }
-    .tab-btn.active { background: #22c55e; color: #07130a; }
-
-    .section { display: none; padding: 16px; }
-    .section.active { display: block; }
-
-    .card {
-      background: #1e293b;
-      padding: 16px;
-      border-radius: 12px;
-      margin-bottom: 14px;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    .muted { opacity: 0.85; font-size: 14px; }
-    .small { font-size: 12px; opacity: 0.8; }
-    .row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 900;
-    }
-    .green { background: rgba(34,197,94,0.18); color: #22c55e; }
-    .yellow { background: rgba(250,204,21,0.18); color: #facc15; }
-    .red { background: rgba(239,68,68,0.18); color: #ef4444; }
-
-    #residentMap {
-      height: 48vh;
-      width: 100%;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.10);
-      overflow: hidden;
-      margin-top: 10px;
-    }
-
-    .station-card {
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 10px;
-      background: #111827;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    input, select, textarea {
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: #0b1220;
-      color: white;
-      outline: none;
-      margin-top: 8px;
-      box-sizing: border-box;
-    }
-    label { font-weight: 900; display: block; margin-top: 12px; }
-    .success { color: #22c55e; font-weight: 900; }
-    .error { color: #ef4444; font-weight: 900; }
-
-    .leaflet-popup-content-wrapper {
-      background: #0b1220;
-      color: white;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12);
-    }
-    .leaflet-popup-tip { background: #0b1220; }
-
-    #qr-reader { width: 100%; max-width: 420px; margin-top: 10px; }
-    .pill {
-      display: inline-block;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.08);
-      margin-right: 8px;
-      margin-top: 8px;
-      font-size: 12px;
-      font-weight: 900;
-    }
-  </style>
+<style>
+body{margin:0;background:#0f172a;color:white;font-family:system-ui;}
+header{padding:15px;background:#0b1220;}
+#map{height:60vh;}
+button{padding:8px 12px;border-radius:8px;border:none;font-weight:bold;}
+.card{padding:15px;background:#111827;margin:10px;border-radius:10px;}
+</style>
 </head>
 
 <body>
-  <header>
-    <h2>Residents Dashboard</h2>
-    <button class="logout" onclick="logout()">Logout</button>
-  </header>
 
-  <div class="tabs">
-    <button class="tab-btn active" onclick="showTab('nearby', event)">Nearby Stations</button>
-    <button class="tab-btn" onclick="showTab('sort', event)">How to Sort</button>
-    <button class="tab-btn" onclick="showTab('rewards', event)">Rewards (QR)</button>
-    <button class="tab-btn" onclick="showTab('report', event)">Report / Feedback</button>
-  </div>
+<header>Residents Map View</header>
 
-  <!-- Nearby Stations -->
-  <div id="nearby" class="section active">
-    <div class="card">
-      <div class="row">
-        <div>
-          <h3 style="margin:0">Nearby Stations (Map)</h3>
-          <div class="muted">Tap a marker to view details & directions.</div>
-        </div>
-        <div class="row">
-          <button onclick="toggleHeatmap()">Heatmap</button>
-          <button onclick="toggleCoverage()">150m Coverage</button>
-          <button onclick="refreshStations()">Refresh</button>
-        </div>
-      </div>
+<div id="map"></div>
 
-      <div id="residentMap"></div>
-
-      <div class="station-card" id="stationDetails">
-        <div class="muted">Click a station marker to see details.</div>
-      </div>
-
-      <div class="station-card">
-        <b>Nearest Stations</b>
-        <div class="small">Sorted by distance (if GPS allowed)</div>
-        <div id="nearestList" class="small" style="margin-top:10px;">Loading…</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- How to Sort -->
-  <div id="sort" class="section">
-    <div class="card">
-      <h3>How to Sort</h3>
-      <div class="muted">Quick guide (replace with icons later):</div>
-      <ul>
-        <li><b>Plastic</b>: bottles, containers (empty + rinse if possible)</li>
-        <li><b>Paper</b>: cardboard, clean paper (avoid greasy paper)</li>
-        <li><b>Metal</b>: cans, foil</li>
-        <li><b>Glass</b>: jars, bottles</li>
-        <li><b>General</b>: food waste, mixed waste</li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- Rewards -->
-  <div id="rewards" class="section">
-    <div class="card">
-      <h3>Rewards (QR)</h3>
-
-      <div class="station-card">
-        <div class="row">
-          <div>
-            <div><b>Points Balance</b></div>
-            <div id="pointsBalance" style="font-size:22px;font-weight:900">Loading…</div>
-          </div>
-          <div><span class="pill" id="tierPill">Tier: —</span></div>
-        </div>
-        <div class="small">Anti-abuse: 1 scan per station per hour.</div>
-      </div>
-
-      <div class="station-card">
-        <b>Scan QR Code (Phone Camera)</b>
-        <div class="muted small">QR content = station ID (example: <code>S07</code>).</div>
-        <div id="qr-reader"></div>
-        <div class="row" style="margin-top:10px">
-          <button onclick="startQR()">Start Camera</button>
-          <button onclick="stopQR()">Stop Camera</button>
-        </div>
-        <div id="qrMsg" class="small" style="margin-top:10px"></div>
-      </div>
-
-      <div class="station-card">
-        <label>Manual Scan (Fallback)</label>
-        <select id="rewardStationSelect"></select>
-        <button style="margin-top:10px" onclick="scanStationManual()">Scan (+10 points)</button>
-        <div id="scanMsg" class="small" style="margin-top:8px"></div>
-      </div>
-
-      <div class="station-card">
-        <b>Redeem Discounts</b>
-        <div class="muted small">Redeem points for coupons (prototype partners).</div>
-        <div id="redeemList" style="margin-top:10px">Loading…</div>
-        <div id="redeemMsg" class="small" style="margin-top:10px"></div>
-      </div>
-
-      <div class="station-card">
-        <b>Leaderboard (Top 10)</b>
-        <div id="leaderboard" class="small" style="margin-top:10px">Loading…</div>
-      </div>
-
-      <div class="station-card">
-        <b>Reward History</b>
-        <div id="rewardHistory" class="small" style="margin-top:10px">Loading…</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Report -->
-  <div id="report" class="section">
-    <div class="card">
-      <h3>Report / Feedback</h3>
-      <p class="muted">Submit an issue (overflow, smell, broken lid, animals, etc.).</p>
-
-      <label for="stationId">Station</label>
-      <select id="stationId">
-        <option value="">(Optional) Select a station</option>
-      </select>
-
-      <label for="issueType">Issue Type</label>
-      <select id="issueType">
-        <option value="overflow">Overflow</option>
-        <option value="smell">Bad smell</option>
-        <option value="broken">Broken lid / door</option>
-        <option value="animals">Animals</option>
-        <option value="other">Other</option>
-      </select>
-
-      <label for="note">Notes</label>
-      <textarea id="note" rows="4" placeholder="Describe the issue..."></textarea>
-
-      <div style="height:12px"></div>
-      <button onclick="submitFeedback()">Submit</button>
-      <div style="height:12px"></div>
-      <div id="feedbackMsg"></div>
-    </div>
-  </div>
+<div class="card">
+<button onclick="toggleHeat()">Heatmap</button>
+<button onclick="toggleCoverage()">150m Coverage</button>
+</div>
 
 <script>
-  // ===== Tabs / Auth =====
-  function showTab(id, ev) {
-    document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
-    document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
-    document.getElementById(id).classList.add("active");
-    if (ev && ev.target) ev.target.classList.add("active");
 
-    if (id === "rewards") loadRewardsAll();
-    if (id === "nearby") setTimeout(() => { if (residentMap) residentMap.invalidateSize(); }, 150);
-  }
+const map=L.map('map').setView([26.3188612,50.2277122],15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let markers=[];
+let heatLayer=null;
+let coverageLayer=null;
+let stations=[];
+
+async function loadStations(){
+  const res=await fetch('/api/v1/stations');
+  const data=await res.json();
+  stations=data.stations;
+
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+
+  stations.forEach(s=>{
+    const color=s.fillPct>=95?"red":s.fillPct>=80?"orange":"green";
+    const marker=L.circleMarker([s.lat,s.lng],{
+      radius:8,color:color,fillColor:color,fillOpacity:0.8
+    }).addTo(map);
+
+    marker.bindPopup(`<b>${s.name}</b><br>Fill: ${s.fillPct}%<br>
+    <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}">
+    Directions</a>`);
+
+    markers.push(marker);
+  });
+
+  buildHeat();
+  buildCoverage();
+}
+
+function buildHeat(){
+  const pts=stations.map(s=>[s.lat,s.lng,Math.max(0.1,s.fillPct/100)]);
+  heatLayer=L.heatLayer(pts,{radius:30});
+}
+
+function toggleHeat(){
+  if(map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+  else heatLayer.addTo(map);
+}
+
+function buildCoverage(){
+  coverageLayer=L.layerGroup();
+  stations.forEach(s=>{
+    L.circle([s.lat,s.lng],{radius:150,color:"#22c55e",fillOpacity:0.05}).addTo(coverageLayer);
+  });
+}
+
+function toggleCoverage(){
+  if(map.hasLayer(coverageLayer)) map.removeLayer(coverageLayer);
+  else coverageLayer.addTo(map);
+}
+
+setInterval(loadStations,5000);
+loadStations();
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    location.href = "/";
-  }
-
-  // ===== Map Setup =====
-  const DEFAULT_CENTER = [26.3188612, 50.2277122];
-  const DEFAULT_ZOOM = 15;
-
-  let residentMap = null;
-  let markers = new Map();
-  let userMarker = null;
-  let userPos = null;
-  let lastStations = [];
-
-  // overlays
-  let heatLayer = null;
-  let coverageLayerGroup = null;
-  let heatOn = false;
-  let coverageOn = false;
-
-  function getStatus(fillPct, locked) {
-    const fill = typeof fillPct === "number" ? fillPct : 0;
-    if (locked || fill >= 95) return { label: "LOCKED", cls: "red", color: "#ef4444" };
-    if (fill >= 80) return { label: "ALERT", cls: "yellow", color: "#facc15" };
-    return { label: "OK", cls: "green", color: "#22c55e" };
-  }
-
-  function makeDotIcon(color) {
-    return L.divIcon({
-      className: "",
-      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};
-             border:2px solid rgba(255,255,255,0.9);box-shadow:0 0 0 6px rgba(255,255,255,0.08);"></div>`,
-      iconSize: [14,14],
-      iconAnchor: [7,7]
-    });
-  }
-
-  function initMap() {
-    if (residentMap) return;
-
-    residentMap = L.map("residentMap").setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 20,
-      attribution: "© OpenStreetMap"
-    }).addTo(residentMap);
-
-    // Try GPS
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          residentMap.setView([userPos.lat, userPos.lng], 16);
-
-          userMarker = L.circleMarker([userPos.lat, userPos.lng], {
-            radius: 7,
-            color: "#60a5fa",
-            fillColor: "#60a5fa",
-            fillOpacity: 0.8
-          }).addTo(residentMap).bindPopup("You are here");
-          refreshStations();
-        },
-        () => refreshStations(),
-        { enableHighAccuracy: true, timeout: 6000 }
-      );
-    } else {
-      refreshStations();
-    }
-  }
-
-  function renderDetails(station) {
-    const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
-    const st = getStatus(fill, !!station.locked);
-
-    const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
-
-    document.getElementById("stationDetails").innerHTML = `
-      <div class="row">
-        <div>
-          <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
-          <div class="small">ID: ${station.id}</div>
-        </div>
-        <span class="badge ${st.cls}">${st.label}</span>
-      </div>
-      <div style="height:10px"></div>
-      <div class="muted">
-        Fill: <b>${fill}%</b><br/>
-        Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
-        Access: <b>${station.locked ? "LOCKED" : "AVAILABLE"}</b><br/>
-        Last Seen: <span class="small">${station.lastSeen || "—"}</span>
-      </div>
-      <div style="height:12px"></div>
-      <div class="row">
-        <a href="${directionsUrl}" target="_blank" style="text-decoration:none">
-          <button>Directions</button>
-        </a>
-        <button onclick="openRewardsAndSelect('${station.id}')">Scan / Rewards</button>
-      </div>
-    `;
-  }
-
-  function openRewardsAndSelect(stationId) {
-    const sel = document.getElementById("rewardStationSelect");
-    if (sel) sel.value = stationId;
-    document.querySelectorAll(".tab-btn")[2].click();
-  }
-
-  function haversineMeters(a, b) {
-    const R = 6371000;
-    const toRad = (x) => x * Math.PI / 180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLng = toRad(b.lng - a.lng);
-    const lat1 = toRad(a.lat);
-    const lat2 = toRad(b.lat);
-    const s =
-      Math.sin(dLat/2)**2 +
-      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(s));
-  }
-
-  function renderNearest(stations) {
-    const list = document.getElementById("nearestList");
-    if (!stations.length) { list.textContent = "No stations found."; return; }
-
-    let enriched = stations.map(s => {
-      let dist = null;
-      if (userPos && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) {
-        dist = haversineMeters(userPos, { lat: Number(s.lat), lng: Number(s.lng) });
-      }
-      return { ...s, dist };
-    });
-
-    enriched.sort((a,b) => {
-      if (a.dist === null && b.dist === null) return 0;
-      if (a.dist === null) return 1;
-      if (b.dist === null) return -1;
-      return a.dist - b.dist;
-    });
-
-    list.innerHTML = "";
-    enriched.slice(0, 8).forEach(s => {
-      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
-      const st = getStatus(fill, !!s.locked);
-      const distTxt = (s.dist === null) ? "distance unavailable" :
-        (s.dist < 1000 ? `${Math.round(s.dist)} m` : `${(s.dist/1000).toFixed(2)} km`);
-
-      const div = document.createElement("div");
-      div.style.padding = "10px";
-      div.style.borderRadius = "10px";
-      div.style.border = "1px solid rgba(255,255,255,0.08)";
-      div.style.background = "#0b1220";
-      div.style.marginBottom = "8px";
-      div.style.cursor = "pointer";
-
-      div.innerHTML = `
-        <div class="row">
-          <div>
-            <b>${s.name || s.id}</b><br/>
-            <span class="small">${distTxt} • Fill ${fill}%</span>
-          </div>
-          <span class="badge ${st.cls}">${st.label}</span>
-        </div>
-      `;
-
-      div.onclick = () => {
-        const m = markers.get(s.id);
-        if (m) {
-          residentMap.setView(m.getLatLng(), Math.max(residentMap.getZoom(), 16));
-          m.openPopup();
-        }
-        renderDetails(s);
-      };
-
-      list.appendChild(div);
-    });
-  }
-
-  // overlays
-  function buildHeatPoints(stations) {
-    return stations
-      .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
-      .map(s => [Number(s.lat), Number(s.lng), Math.max(0.1, (s.fillPct || 0) / 100)]);
-  }
-
-  function makeCoverageCircles(stations) {
-    const group = L.layerGroup();
-    stations.forEach(s => {
-      const lat = Number(s.lat), lng = Number(s.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
-
-      L.circle([lat, lng], {
-        radius: 150,
-        color: "#22c55e",
-        weight: 1,
-        fillColor: "#22c55e",
-        fillOpacity: 0.05
-      }).addTo(group);
-    });
-    return group;
-  }
-
-  function toggleHeatmap() {
-    heatOn = !heatOn;
-    if (!heatLayer) return;
-    if (heatOn) heatLayer.addTo(residentMap);
-    else residentMap.removeLayer(heatLayer);
-  }
-
-  function toggleCoverage() {
-    coverageOn = !coverageOn;
-    if (!coverageLayerGroup) return;
-    if (coverageOn) coverageLayerGroup.addTo(residentMap);
-    else residentMap.removeLayer(coverageLayerGroup);
-  }
-
-  function upsertMarkers(stations) {
-    const seen = new Set();
-
-    stations.forEach(station => {
-      const id = station.id;
-      seen.add(id);
-
-      const lat = Number(station.lat);
-      const lng = Number(station.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
-
-      const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
-      const st = getStatus(fill, !!station.locked);
-
-      const popupHtml = `
-        <div style="min-width:210px">
-          <div style="font-weight:900">${station.name || station.id}</div>
-          <div style="font-size:12px;opacity:0.8">ID: ${station.id}</div>
-          <div style="margin-top:8px;font-size:13px">
-            Fill: <b>${fill}%</b><br/>
-            Status: <b>${st.label}</b>
-          </div>
-        </div>
-      `;
-
-      if (!markers.has(id)) {
-        const marker = L.marker([lat, lng], { icon: makeDotIcon(st.color) }).addTo(residentMap);
-        marker.bindPopup(popupHtml);
-        marker.on("click", () => renderDetails(station));
-        markers.set(id, marker);
-      } else {
-        const marker = markers.get(id);
-        marker.setLatLng([lat, lng]);
-        marker.setIcon(makeDotIcon(st.color));
-        marker.setPopupContent(popupHtml);
-      }
-    });
-
-    for (const [id, marker] of markers.entries()) {
-      if (!seen.has(id)) {
-        residentMap.removeLayer(marker);
-        markers.delete(id);
-      }
-    }
-  }
-
-  async function refreshStations() {
-    try {
-      const res = await fetch("/api/v1/stations");
-      const data = await res.json();
-      const stations = data.stations || [];
-      lastStations = stations;
-
-      upsertMarkers(stations);
-      renderNearest(stations);
-
-      // dropdowns
-      const reportSelect = document.getElementById("stationId");
-      reportSelect.innerHTML = `<option value="">(Optional) Select a station</option>`;
-      stations.forEach(s => {
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = `${s.name || s.id} (${typeof s.fillPct === "number" ? s.fillPct : 0}%)`;
-        reportSelect.appendChild(opt);
-      });
-
-      const rewardSelect = document.getElementById("rewardStationSelect");
-      rewardSelect.innerHTML = "";
-      stations.forEach(s => {
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = s.name || s.id;
-        rewardSelect.appendChild(opt);
-      });
-
-      // overlays rebuild
-      const heatPoints = buildHeatPoints(stations);
-      heatLayer = L.heatLayer(heatPoints, { radius: 28, blur: 20, maxZoom: 17 });
-      if (heatOn) heatLayer.addTo(residentMap);
-
-      coverageLayerGroup = makeCoverageCircles(stations);
-      if (coverageOn) coverageLayerGroup.addTo(residentMap);
-
-      // fit once if no GPS
-      if (!userPos && stations.length && !window.__didFitResidentBounds) {
-        const coords = stations
-          .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
-          .map(s => [Number(s.lat), Number(s.lng)]);
-        if (coords.length >= 2) {
-          residentMap.fitBounds(L.latLngBounds(coords).pad(0.2));
-          window.__didFitResidentBounds = true;
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  setInterval(refreshStations, 20000);
-
-  // ===== Rewards =====
-  function calcTier(points) {
-    if (points >= 500) return "Gold";
-    if (points >= 200) return "Silver";
-    return "Bronze";
-  }
-
-  async function loadRewardsAll() {
-    await Promise.all([loadBalance(), loadHistory(), loadLeaderboard(), loadCatalog()]);
-  }
-
-  async function loadBalance() {
-    const balanceEl = document.getElementById("pointsBalance");
-    const tierEl = document.getElementById("tierPill");
-    balanceEl.textContent = "Loading…";
-    tierEl.textContent = "Tier: —";
-
-    const res = await fetch("/api/rewards/balance");
-    const data = await res.json();
-    if (!res.ok || !data.ok) { balanceEl.textContent = "—"; return; }
-
-    balanceEl.textContent = `${data.points} points`;
-    tierEl.textContent = `Tier: ${calcTier(data.points)}`;
-  }
-
-  async function loadHistory() {
-    const historyEl = document.getElementById("rewardHistory");
-    historyEl.textContent = "Loading…";
-
-    const res = await fetch("/api/rewards/history");
-    const data = await res.json();
-    if (!res.ok || !data.ok) { historyEl.textContent = "Error loading history."; return; }
-
-    const h = data.history || [];
-    if (!h.length) { historyEl.textContent = "No activity yet."; return; }
-
-    historyEl.innerHTML = "";
-    h.slice(0, 25).forEach(item => {
-      const dt = item.createdAt ? new Date(item.createdAt).toLocaleString() : "";
-      let line = "";
-      if (item.type === "reward_scan") line = `+${item.points} points • Scan • ${item.stationId} • ${dt}`;
-      else if (item.type === "reward_redeem") line = `${item.points} points • Redeem • ${item.rewardName} • Coupon: ${item.coupon} • ${dt}`;
-      else line = `${item.type} • ${dt}`;
-      const row = document.createElement("div");
-      row.textContent = line;
-      historyEl.appendChild(row);
-    });
-  }
-
-  async function loadLeaderboard() {
-    const div = document.getElementById("leaderboard");
-    div.textContent = "Loading…";
-
-    const res = await fetch("/api/rewards/leaderboard");
-    const data = await res.json();
-    if (!res.ok || !data.ok) { div.textContent = "Error loading leaderboard."; return; }
-
-    const lb = data.leaderboard || [];
-    if (!lb.length) { div.textContent = "No users yet."; return; }
-
-    div.innerHTML = "";
-    lb.forEach((u, i) => {
-      const row = document.createElement("div");
-      row.textContent = `${i + 1}. ${u.name} — ${u.points} pts`;
-      div.appendChild(row);
-    });
-  }
-
-  async function loadCatalog() {
-    const div = document.getElementById("redeemList");
-    div.textContent = "Loading…";
-
-    const res = await fetch("/api/rewards/catalog");
-    const data = await res.json();
-    if (!res.ok || !data.ok) { div.textContent = "Error loading catalog."; return; }
-
-    const catalog = data.catalog || [];
-    if (!catalog.length) { div.textContent = "No rewards available."; return; }
-
-    div.innerHTML = "";
-    catalog.forEach(r => {
-      const card = document.createElement("div");
-      card.className = "station-card";
-      card.style.marginBottom = "10px";
-
-      card.innerHTML = `
-        <div class="row">
-          <div>
-            <div style="font-weight:900">${r.name}</div>
-            <div class="small">Partner: ${r.partner || "—"}</div>
-          </div>
-          <div style="font-weight:900">${r.cost} pts</div>
-        </div>
-        <button style="margin-top:10px" onclick="redeemReward('${r.id}')">Redeem</button>
-      `;
-      div.appendChild(card);
-    });
-  }
-
-  async function redeemReward(rewardId) {
-    const msg = document.getElementById("redeemMsg");
-    msg.textContent = "";
-
-    const res = await fetch("/api/rewards/redeem", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rewardId })
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.ok) {
-      msg.textContent = `❌ ${data.error || "Redeem failed"}`;
-      return;
-    }
-
-    msg.textContent = `✅ Redeemed! Coupon: ${data.coupon} (New Balance: ${data.newBalance})`;
-    await loadRewardsAll();
-  }
-
-  async function scanStationManual() {
-    const stationId = document.getElementById("rewardStationSelect").value;
-    return scanStationId(stationId, "scanMsg");
-  }
-
-  async function scanStationId(stationId, msgElId) {
-    const msg = document.getElementById(msgElId);
-    msg.textContent = "";
-    if (!stationId) { msg.textContent = "Select/scan a station first."; return; }
-
-    const res = await fetch("/api/rewards/scan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stationId })
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.ok) {
-      msg.textContent = `❌ ${data.error || "Scan failed"}`;
-      return;
-    }
-
-    msg.textContent = `✅ +${data.added} points! New balance: ${data.newBalance}`;
-    await loadRewardsAll();
-  }
-
-  let qrScanner = null;
-
-  function startQR() {
-    const msg = document.getElementById("qrMsg");
-    msg.textContent = "";
-    if (qrScanner) { msg.textContent = "Camera already running."; return; }
-
-    qrScanner = new Html5Qrcode("qr-reader");
-    qrScanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      async (decodedText) => {
-        await scanStationId(decodedText.trim(), "qrMsg");
-        stopQR();
-      },
-      () => {}
-    ).catch(err => {
-      msg.textContent = "❌ Camera failed: " + err;
-      qrScanner = null;
-    });
-  }
-
-  function stopQR() {
-    if (!qrScanner) return;
-    qrScanner.stop().then(() => {
-      qrScanner.clear();
-      qrScanner = null;
-    }).catch(() => { qrScanner = null; });
-  }
-
-  // ===== Feedback =====
-  async function submitFeedback() {
-    const msg = document.getElementById("feedbackMsg");
-    msg.textContent = "";
-    msg.className = "";
-
-    const stationId = document.getElementById("stationId").value || null;
-    const issueType = document.getElementById("issueType").value;
-    const note = document.getElementById("note").value || "";
-
-    try {
-      const res = await fetch("/api/v1/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stationId, issueType, note })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit");
-
-      msg.className = "success";
-      msg.textContent = "Submitted. Thank you!";
-      document.getElementById("note").value = "";
-    } catch (err) {
-      msg.className = "error";
-      msg.textContent = "Error: " + err.message;
-    }
-  }
-
-  // Init
-  initMap();
-  loadRewardsAll();
 </script>
+
 </body>
 </html>
