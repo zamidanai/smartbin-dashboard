@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Residents Portal</title>
 
-  <!-- Leaflet Map -->
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Heatmap -->
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <!-- QR scanner -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -33,10 +36,10 @@
       border-radius: 10px;
       cursor: pointer;
       font-weight: 900;
+      background: #334155;
+      color: white;
     }
-    .logout { background: #ef4444; color: white; }
-    .btn-link { background: #334155; color: white; }
-
+    .logout { background: #ef4444; }
     .tabs {
       display: flex;
       gap: 10px;
@@ -59,7 +62,6 @@
     }
     .muted { opacity: 0.85; font-size: 14px; }
     .small { font-size: 12px; opacity: 0.8; }
-
     .row {
       display: flex;
       align-items: center;
@@ -85,6 +87,7 @@
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.10);
       overflow: hidden;
+      margin-top: 10px;
     }
 
     .station-card {
@@ -107,11 +110,9 @@
       box-sizing: border-box;
     }
     label { font-weight: 900; display: block; margin-top: 12px; }
-
     .success { color: #22c55e; font-weight: 900; }
     .error { color: #ef4444; font-weight: 900; }
 
-    /* Leaflet popup theme */
     .leaflet-popup-content-wrapper {
       background: #0b1220;
       color: white;
@@ -120,12 +121,7 @@
     }
     .leaflet-popup-tip { background: #0b1220; }
 
-    #qr-reader {
-      width: 100%;
-      max-width: 420px;
-      margin-top: 10px;
-    }
-
+    #qr-reader { width: 100%; max-width: 420px; margin-top: 10px; }
     .pill {
       display: inline-block;
       padding: 6px 10px;
@@ -152,7 +148,7 @@
     <button class="tab-btn" onclick="showTab('report', event)">Report / Feedback</button>
   </div>
 
-  <!-- Nearby Stations (MAP FIRST) -->
+  <!-- Nearby Stations -->
   <div id="nearby" class="section active">
     <div class="card">
       <div class="row">
@@ -160,10 +156,13 @@
           <h3 style="margin:0">Nearby Stations (Map)</h3>
           <div class="muted">Tap a marker to view details & directions.</div>
         </div>
-        <button class="btn-link" onclick="refreshStations()">Refresh</button>
+        <div class="row">
+          <button onclick="toggleHeatmap()">Heatmap</button>
+          <button onclick="toggleCoverage()">150m Coverage</button>
+          <button onclick="refreshStations()">Refresh</button>
+        </div>
       </div>
 
-      <div style="height:10px"></div>
       <div id="residentMap"></div>
 
       <div class="station-card" id="stationDetails">
@@ -204,20 +203,18 @@
             <div><b>Points Balance</b></div>
             <div id="pointsBalance" style="font-size:22px;font-weight:900">Loading…</div>
           </div>
-          <div>
-            <span class="pill" id="tierPill">Tier: —</span>
-          </div>
+          <div><span class="pill" id="tierPill">Tier: —</span></div>
         </div>
         <div class="small">Anti-abuse: 1 scan per station per hour.</div>
       </div>
 
       <div class="station-card">
         <b>Scan QR Code (Phone Camera)</b>
-        <div class="muted small">QR should contain station ID (example: <code>station1</code>).</div>
+        <div class="muted small">QR content = station ID (example: <code>S07</code>).</div>
         <div id="qr-reader"></div>
         <div class="row" style="margin-top:10px">
-          <button class="btn-link" onclick="startQR()">Start Camera</button>
-          <button class="btn-link" onclick="stopQR()">Stop Camera</button>
+          <button onclick="startQR()">Start Camera</button>
+          <button onclick="stopQR()">Stop Camera</button>
         </div>
         <div id="qrMsg" class="small" style="margin-top:10px"></div>
       </div>
@@ -225,7 +222,7 @@
       <div class="station-card">
         <label>Manual Scan (Fallback)</label>
         <select id="rewardStationSelect"></select>
-        <button class="btn-link" style="margin-top:10px" onclick="scanStationManual()">Scan (+10 points)</button>
+        <button style="margin-top:10px" onclick="scanStationManual()">Scan (+10 points)</button>
         <div id="scanMsg" class="small" style="margin-top:8px"></div>
       </div>
 
@@ -272,8 +269,7 @@
       <textarea id="note" rows="4" placeholder="Describe the issue..."></textarea>
 
       <div style="height:12px"></div>
-      <button class="btn-link" onclick="submitFeedback()">Submit</button>
-
+      <button onclick="submitFeedback()">Submit</button>
       <div style="height:12px"></div>
       <div id="feedbackMsg"></div>
     </div>
@@ -297,7 +293,7 @@
   }
 
   // ===== Map Setup =====
-  const DEFAULT_CENTER = [26.4205, 50.0888];
+  const DEFAULT_CENTER = [26.3188612, 50.2277122];
   const DEFAULT_ZOOM = 15;
 
   let residentMap = null;
@@ -305,6 +301,12 @@
   let userMarker = null;
   let userPos = null;
   let lastStations = [];
+
+  // overlays
+  let heatLayer = null;
+  let coverageLayerGroup = null;
+  let heatOn = false;
+  let coverageOn = false;
 
   function getStatus(fillPct, locked) {
     const fill = typeof fillPct === "number" ? fillPct : 0;
@@ -316,14 +318,8 @@
   function makeDotIcon(color) {
     return L.divIcon({
       className: "",
-      html: `
-        <div style="
-          width:14px;height:14px;border-radius:50%;
-          background:${color};
-          border:2px solid rgba(255,255,255,0.9);
-          box-shadow:0 0 0 6px rgba(255,255,255,0.08);
-        "></div>
-      `,
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};
+             border:2px solid rgba(255,255,255,0.9);box-shadow:0 0 0 6px rgba(255,255,255,0.08);"></div>`,
       iconSize: [14,14],
       iconAnchor: [7,7]
     });
@@ -338,7 +334,7 @@
       attribution: "© OpenStreetMap"
     }).addTo(residentMap);
 
-    // Try GPS for residents
+    // Try GPS
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -353,10 +349,7 @@
           }).addTo(residentMap).bindPopup("You are here");
           refreshStations();
         },
-        () => {
-          // GPS denied; still load stations
-          refreshStations();
-        },
+        () => refreshStations(),
         { enableHighAccuracy: true, timeout: 6000 }
       );
     } else {
@@ -368,12 +361,9 @@
     const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
     const st = getStatus(fill, !!station.locked);
 
-    const details = document.getElementById("stationDetails");
+    const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
 
-    const directionsUrl =
-      `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
-
-    details.innerHTML = `
+    document.getElementById("stationDetails").innerHTML = `
       <div class="row">
         <div>
           <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
@@ -381,7 +371,6 @@
         </div>
         <span class="badge ${st.cls}">${st.label}</span>
       </div>
-
       <div style="height:10px"></div>
       <div class="muted">
         Fill: <b>${fill}%</b><br/>
@@ -389,21 +378,128 @@
         Access: <b>${station.locked ? "LOCKED" : "AVAILABLE"}</b><br/>
         Last Seen: <span class="small">${station.lastSeen || "—"}</span>
       </div>
-
       <div style="height:12px"></div>
       <div class="row">
         <a href="${directionsUrl}" target="_blank" style="text-decoration:none">
-          <button class="btn-link">Directions</button>
+          <button>Directions</button>
         </a>
-        <button class="btn-link" onclick="openRewardsAndSelect('${station.id}')">Scan / Rewards</button>
+        <button onclick="openRewardsAndSelect('${station.id}')">Scan / Rewards</button>
       </div>
     `;
   }
 
   function openRewardsAndSelect(stationId) {
-    document.getElementById("rewardStationSelect").value = stationId;
-    // switch to rewards tab
+    const sel = document.getElementById("rewardStationSelect");
+    if (sel) sel.value = stationId;
     document.querySelectorAll(".tab-btn")[2].click();
+  }
+
+  function haversineMeters(a, b) {
+    const R = 6371000;
+    const toRad = (x) => x * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const s =
+      Math.sin(dLat/2)**2 +
+      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  function renderNearest(stations) {
+    const list = document.getElementById("nearestList");
+    if (!stations.length) { list.textContent = "No stations found."; return; }
+
+    let enriched = stations.map(s => {
+      let dist = null;
+      if (userPos && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) {
+        dist = haversineMeters(userPos, { lat: Number(s.lat), lng: Number(s.lng) });
+      }
+      return { ...s, dist };
+    });
+
+    enriched.sort((a,b) => {
+      if (a.dist === null && b.dist === null) return 0;
+      if (a.dist === null) return 1;
+      if (b.dist === null) return -1;
+      return a.dist - b.dist;
+    });
+
+    list.innerHTML = "";
+    enriched.slice(0, 8).forEach(s => {
+      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
+      const st = getStatus(fill, !!s.locked);
+      const distTxt = (s.dist === null) ? "distance unavailable" :
+        (s.dist < 1000 ? `${Math.round(s.dist)} m` : `${(s.dist/1000).toFixed(2)} km`);
+
+      const div = document.createElement("div");
+      div.style.padding = "10px";
+      div.style.borderRadius = "10px";
+      div.style.border = "1px solid rgba(255,255,255,0.08)";
+      div.style.background = "#0b1220";
+      div.style.marginBottom = "8px";
+      div.style.cursor = "pointer";
+
+      div.innerHTML = `
+        <div class="row">
+          <div>
+            <b>${s.name || s.id}</b><br/>
+            <span class="small">${distTxt} • Fill ${fill}%</span>
+          </div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      `;
+
+      div.onclick = () => {
+        const m = markers.get(s.id);
+        if (m) {
+          residentMap.setView(m.getLatLng(), Math.max(residentMap.getZoom(), 16));
+          m.openPopup();
+        }
+        renderDetails(s);
+      };
+
+      list.appendChild(div);
+    });
+  }
+
+  // overlays
+  function buildHeatPoints(stations) {
+    return stations
+      .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+      .map(s => [Number(s.lat), Number(s.lng), Math.max(0.1, (s.fillPct || 0) / 100)]);
+  }
+
+  function makeCoverageCircles(stations) {
+    const group = L.layerGroup();
+    stations.forEach(s => {
+      const lat = Number(s.lat), lng = Number(s.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
+
+      L.circle([lat, lng], {
+        radius: 150,
+        color: "#22c55e",
+        weight: 1,
+        fillColor: "#22c55e",
+        fillOpacity: 0.05
+      }).addTo(group);
+    });
+    return group;
+  }
+
+  function toggleHeatmap() {
+    heatOn = !heatOn;
+    if (!heatLayer) return;
+    if (heatOn) heatLayer.addTo(residentMap);
+    else residentMap.removeLayer(heatLayer);
+  }
+
+  function toggleCoverage() {
+    coverageOn = !coverageOn;
+    if (!coverageLayerGroup) return;
+    if (coverageOn) coverageLayerGroup.addTo(residentMap);
+    else residentMap.removeLayer(coverageLayerGroup);
   }
 
   function upsertMarkers(stations) {
@@ -415,7 +511,6 @@
 
       const lat = Number(station.lat);
       const lng = Number(station.lng);
-
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
 
       const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
@@ -453,81 +548,6 @@
     }
   }
 
-  function haversineMeters(a, b) {
-    const R = 6371000;
-    const toRad = (x) => x * Math.PI / 180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLng = toRad(b.lng - a.lng);
-    const lat1 = toRad(a.lat);
-    const lat2 = toRad(b.lat);
-    const s =
-      Math.sin(dLat/2)**2 +
-      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(s));
-  }
-
-  function renderNearest(stations) {
-    const list = document.getElementById("nearestList");
-
-    if (!stations.length) {
-      list.textContent = "No stations found.";
-      return;
-    }
-
-    let enriched = stations.map(s => {
-      let dist = null;
-      if (userPos && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) {
-        dist = haversineMeters(userPos, { lat: Number(s.lat), lng: Number(s.lng) });
-      }
-      return { ...s, dist };
-    });
-
-    enriched.sort((a,b) => {
-      if (a.dist === null && b.dist === null) return 0;
-      if (a.dist === null) return 1;
-      if (b.dist === null) return -1;
-      return a.dist - b.dist;
-    });
-
-    list.innerHTML = "";
-    enriched.slice(0, 8).forEach(s => {
-      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
-      const st = getStatus(fill, !!s.locked);
-
-      const div = document.createElement("div");
-      div.style.padding = "10px";
-      div.style.borderRadius = "10px";
-      div.style.border = "1px solid rgba(255,255,255,0.08)";
-      div.style.background = "#0b1220";
-      div.style.marginBottom = "8px";
-      div.style.cursor = "pointer";
-
-      const distTxt = (s.dist === null) ? "distance unavailable" :
-        (s.dist < 1000 ? `${Math.round(s.dist)} m` : `${(s.dist/1000).toFixed(2)} km`);
-
-      div.innerHTML = `
-        <div class="row">
-          <div>
-            <b>${s.name || s.id}</b><br/>
-            <span class="small">${distTxt} • Fill ${fill}%</span>
-          </div>
-          <span class="badge ${st.cls}">${st.label}</span>
-        </div>
-      `;
-
-      div.onclick = () => {
-        const m = markers.get(s.id);
-        if (m) {
-          residentMap.setView(m.getLatLng(), Math.max(residentMap.getZoom(), 16));
-          m.openPopup();
-        }
-        renderDetails(s);
-      };
-
-      list.appendChild(div);
-    });
-  }
-
   async function refreshStations() {
     try {
       const res = await fetch("/api/v1/stations");
@@ -538,7 +558,7 @@
       upsertMarkers(stations);
       renderNearest(stations);
 
-      // Fill dropdowns that depend on stations
+      // dropdowns
       const reportSelect = document.getElementById("stationId");
       reportSelect.innerHTML = `<option value="">(Optional) Select a station</option>`;
       stations.forEach(s => {
@@ -557,7 +577,15 @@
         rewardSelect.appendChild(opt);
       });
 
-      // Fit bounds once (if no GPS)
+      // overlays rebuild
+      const heatPoints = buildHeatPoints(stations);
+      heatLayer = L.heatLayer(heatPoints, { radius: 28, blur: 20, maxZoom: 17 });
+      if (heatOn) heatLayer.addTo(residentMap);
+
+      coverageLayerGroup = makeCoverageCircles(stations);
+      if (coverageOn) coverageLayerGroup.addTo(residentMap);
+
+      // fit once if no GPS
       if (!userPos && stations.length && !window.__didFitResidentBounds) {
         const coords = stations
           .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
@@ -567,13 +595,11 @@
           window.__didFitResidentBounds = true;
         }
       }
-
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  // Auto refresh every 20s
   setInterval(refreshStations, 20000);
 
   // ===== Rewards =====
@@ -584,12 +610,7 @@
   }
 
   async function loadRewardsAll() {
-    await Promise.all([
-      loadBalance(),
-      loadHistory(),
-      loadLeaderboard(),
-      loadCatalog()
-    ]);
+    await Promise.all([loadBalance(), loadHistory(), loadLeaderboard(), loadCatalog()]);
   }
 
   async function loadBalance() {
@@ -674,9 +695,7 @@
           </div>
           <div style="font-weight:900">${r.cost} pts</div>
         </div>
-        <button class="btn-link" style="margin-top:10px" onclick="redeemReward('${r.id}')">
-          Redeem
-        </button>
+        <button style="margin-top:10px" onclick="redeemReward('${r.id}')">Redeem</button>
       `;
       div.appendChild(card);
     });
