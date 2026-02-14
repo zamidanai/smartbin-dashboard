@@ -1,122 +1,433 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Authority Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authority Dashboard — Live Map</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-body{margin:0;background:#0b1220;color:white;font-family:system-ui;}
-header{padding:15px;background:#070d18;display:flex;justify-content:space-between;}
-button{padding:8px 12px;border-radius:8px;border:none;font-weight:bold;cursor:pointer;}
-#map{height:60vh;}
-.panel{padding:15px;}
-.card{background:#111827;padding:12px;border-radius:10px;margin-bottom:10px;}
-</style>
+  <!-- Heatmap -->
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+  <style>
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b1220; color:white; height:100vh; display:flex; flex-direction:column; }
+    header { padding:14px 16px; background:#070d18; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); }
+    header h2 { margin:0; font-size:16px; font-weight:900; }
+    button { padding:10px 12px; border-radius:10px; border:none; cursor:pointer; font-weight:900; background:#334155; color:white; }
+    .danger { background:#ef4444; }
+    .okbtn { background:#22c55e; color:#07130a; }
+    .layout { flex:1; display:grid; grid-template-columns: 1.6fr 1fr; gap:12px; padding:12px; }
+    #map { width:100%; height: calc(100vh - 70px); border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.08); }
+    .panel { height: calc(100vh - 70px); border-radius:14px; border:1px solid rgba(255,255,255,0.08); background:#0f172a; padding:14px; overflow:auto; }
+    .card { background:#111827; padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:12px; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .badge { padding:4px 10px; border-radius:999px; font-weight:900; font-size:12px; }
+    .green { background: rgba(34,197,94,0.18); color:#22c55e; }
+    .yellow { background: rgba(250,204,21,0.18); color:#facc15; }
+    .red { background: rgba(239,68,68,0.18); color:#ef4444; }
+    .small { font-size:12px; opacity:0.82; }
+    .metric { font-size:22px; font-weight:900; }
+    .item { padding:10px; border-radius:10px; margin-top:8px; border:1px solid rgba(255,255,255,0.08); background:#0b1220; cursor:pointer; }
+    .leaflet-popup-content-wrapper { background:#0b1220; color:white; border-radius:12px; border:1px solid rgba(255,255,255,0.12); }
+    .leaflet-popup-tip { background:#0b1220; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } #map, .panel { height:48vh; } }
+  </style>
 </head>
 
 <body>
-
 <header>
-  <div>Authority Dashboard</div>
-  <div>
-    <button onclick="startSim()">Start Simulation</button>
-    <button onclick="stopSim()">Stop Simulation</button>
+  <h2>Authority — Live Status & Alerts</h2>
+  <div class="row">
+    <button onclick="refreshStations()">Refresh</button>
+    <button class="danger" onclick="logout()">Logout</button>
   </div>
 </header>
 
-<div id="map"></div>
+<div class="layout">
+  <div id="map"></div>
 
-<div class="panel">
-  <div class="card">
-    <button onclick="toggleHeat()">Heatmap</button>
-    <button onclick="toggleCoverage()">150m Coverage</button>
-    <button onclick="optimizeRoute()">Optimize Route</button>
-    <pre id="routeOutput"></pre>
+  <div class="panel">
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="small">Total Stations</div>
+          <div id="totalStations" class="metric">0</div>
+        </div>
+        <div>
+          <div class="small">Alerts (80%+)</div>
+          <div id="alertStations" class="metric">0</div>
+        </div>
+        <div>
+          <div class="small">Locked (95%+)</div>
+          <div id="lockedStations" class="metric">0</div>
+        </div>
+      </div>
+      <div class="small" style="margin-top:10px;">
+        Lock policy: station locks at <b>95%</b>. Alert starts at <b>80%</b>.
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Investor Demo Simulation</b>
+      <div class="small">Show real-time overflow waves + locks.</div>
+      <div class="row" style="margin-top:10px;">
+        <button class="okbtn" onclick="simStart()">Start</button>
+        <button onclick="simStop()">Stop</button>
+        <button onclick="simReset()">Reset</button>
+      </div>
+      <div id="simMsg" class="small" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <b>Map Layers</b>
+      <div class="small">Heatmap + 150m walk-coverage + route planning</div>
+      <div class="row" style="margin-top:10px;">
+        <button onclick="toggleHeatmap()">Heatmap</button>
+        <button onclick="toggleCoverage()">150m Coverage</button>
+        <button onclick="buildRoute()">Optimize Route</button>
+      </div>
+      <div id="routeBox" class="small" style="margin-top:10px; white-space:pre-wrap;"></div>
+    </div>
+
+    <div class="card" id="detailsCard">
+      <div class="small">Click a station marker to view details here.</div>
+    </div>
+
+    <div class="card">
+      <b>Prioritized Pickup List</b>
+      <div class="small">Highest fill first (odor flagged)</div>
+      <div id="pickupList" class="small" style="margin-top:10px;">Loading…</div>
+    </div>
   </div>
 </div>
 
 <script>
+  const DEFAULT_CENTER = [26.3188612, 50.2277122];
+  const DEFAULT_ZOOM = 15;
 
-const map=L.map('map').setView([26.3188612,50.2277122],15);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const map = L.map("map").setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 20,
+    attribution: "© OpenStreetMap"
+  }).addTo(map);
 
-let markers=[];
-let heatLayer=null;
-let coverageLayer=null;
-let stations=[];
+  const markers = new Map();
+  let lastStations = [];
 
-async function loadStations(){
-  const res=await fetch('/api/v1/stations');
-  const data=await res.json();
-  stations=data.stations;
+  // overlays
+  let heatLayer = null;
+  let coverageLayerGroup = null;
+  let heatOn = false;
+  let coverageOn = false;
 
-  markers.forEach(m=>map.removeLayer(m));
-  markers=[];
+  // route line
+  let routeLine = null;
 
-  stations.forEach(s=>{
-    const color=s.fillPct>=95?"red":s.fillPct>=80?"orange":"green";
-    const marker=L.circleMarker([s.lat,s.lng],{
-      radius:8,
-      color:color,
-      fillColor:color,
-      fillOpacity:0.8
-    }).addTo(map);
+  function getStatus(fillPct, locked) {
+    const fill = typeof fillPct === "number" ? fillPct : 0;
+    if (locked || fill >= 95) return { label: "LOCKED", cls: "red", color: "#ef4444" };
+    if (fill >= 80) return { label: "ALERT", cls: "yellow", color: "#facc15" };
+    return { label: "OK", cls: "green", color: "#22c55e" };
+  }
 
-    marker.bindPopup(`<b>${s.name}</b><br>Fill: ${s.fillPct}%<br>
-    <button onclick="markEmptied('${s.id}')">Mark Emptied</button>`);
+  function makeDotIcon(color) {
+    return L.divIcon({
+      className: "",
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};
+             border:2px solid rgba(255,255,255,0.9);box-shadow:0 0 0 6px rgba(255,255,255,0.08);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+  }
 
-    markers.push(marker);
-  });
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    location.href = "/";
+  }
 
-  buildHeat();
-  buildCoverage();
-}
+  async function markEmptied(stationId) {
+    await fetch(`/api/v1/stations/${stationId}/mark-emptied`, { method: "POST" });
+    await refreshStations();
+  }
 
-async function markEmptied(id){
-  await fetch(`/api/v1/stations/${id}/mark-emptied`,{method:'POST'});
-  loadStations();
-}
+  // Simulation controls (authority only)
+  async function simStart() {
+    const r = await fetch("/api/simulation/start", { method: "POST" });
+    document.getElementById("simMsg").textContent = r.ok ? "Simulation running." : "Simulation failed (are you logged in as authority?)";
+  }
+  async function simStop() {
+    const r = await fetch("/api/simulation/stop", { method: "POST" });
+    document.getElementById("simMsg").textContent = r.ok ? "Simulation stopped." : "Stop failed.";
+  }
+  async function simReset() {
+    const r = await fetch("/api/simulation/reset", { method: "POST" });
+    document.getElementById("simMsg").textContent = r.ok ? "Reset complete (stations low again)." : "Reset failed.";
+    await refreshStations();
+  }
 
-function buildHeat(){
-  const pts=stations.map(s=>[s.lat,s.lng,Math.max(0.1,s.fillPct/100)]);
-  heatLayer=L.heatLayer(pts,{radius:30});
-}
+  function updateStats(stations) {
+    document.getElementById("totalStations").textContent = stations.length;
+    document.getElementById("alertStations").textContent = stations.filter(s => (s.fillPct||0) >= 80).length;
+    document.getElementById("lockedStations").textContent = stations.filter(s => s.locked || (s.fillPct||0) >= 95).length;
+  }
 
-function toggleHeat(){
-  if(map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
-  else heatLayer.addTo(map);
-}
+  function renderDetails(station) {
+    const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+    const st = getStatus(fill, !!station.locked);
 
-function buildCoverage(){
-  coverageLayer=L.layerGroup();
-  stations.forEach(s=>{
-    L.circle([s.lat,s.lng],{radius:150,color:"#3b82f6",fillOpacity:0.05}).addTo(coverageLayer);
-  });
-}
+    document.getElementById("detailsCard").innerHTML = `
+      <div class="row">
+        <div>
+          <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
+          <div class="small">ID: ${station.id}</div>
+        </div>
+        <span class="badge ${st.cls}">${st.label}</span>
+      </div>
+      <div style="height:10px"></div>
+      <div class="small">
+        Fill: <b>${fill}%</b><br/>
+        Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
+        Last Seen: ${station.lastSeen || "—"}<br/>
+        Last Emptied: ${station.lastEmptiedAt || "—"}<br/>
+        Location: ${(Number(station.lat)||0).toFixed(5)}, ${(Number(station.lng)||0).toFixed(5)}
+      </div>
+      <div style="height:12px"></div>
+      <button onclick="markEmptied('${station.id}')">Mark Emptied</button>
+    `;
+  }
 
-function toggleCoverage(){
-  if(map.hasLayer(coverageLayer)) map.removeLayer(coverageLayer);
-  else coverageLayer.addTo(map);
-}
+  function renderPickupList(stations) {
+    const list = document.getElementById("pickupList");
 
-function optimizeRoute(){
-  const pickup=stations.filter(s=>s.fillPct>=80);
-  pickup.sort((a,b)=>b.fillPct-a.fillPct);
-  document.getElementById("routeOutput").textContent=
-    pickup.map((s,i)=>`${i+1}. ${s.name} (${s.fillPct}%)`).join("\n");
-}
+    const sorted = stations
+      .slice()
+      .sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
 
-async function startSim(){await fetch('/api/simulation/start',{method:'POST'});}
-async function stopSim(){await fetch('/api/simulation/stop',{method:'POST'});}
+    list.innerHTML = "";
+    if (!sorted.length) {
+      list.textContent = "No stations found.";
+      return;
+    }
 
-setInterval(loadStations,5000);
-loadStations();
+    sorted.slice(0, 15).forEach((s, idx) => {
+      const fill = typeof s.fillPct === "number" ? s.fillPct : 0;
+      const st = getStatus(fill, !!s.locked);
 
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <div class="row">
+          <div>
+            <b>${idx+1}. ${s.name || s.id}</b><br/>
+            <span class="small">Fill: ${fill}% • Odor: ${s.odorAlert ? "YES" : "NO"}</span>
+          </div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      `;
+      div.onclick = () => {
+        const m = markers.get(s.id);
+        if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); m.openPopup(); }
+        renderDetails(s);
+      };
+      list.appendChild(div);
+    });
+  }
+
+  // overlays
+  function buildHeatPoints(stations) {
+    return stations
+      .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+      .map(s => [Number(s.lat), Number(s.lng), Math.max(0.1, (s.fillPct || 0) / 100)]);
+  }
+
+  function makeCoverageCircles(stations) {
+    const group = L.layerGroup();
+    stations.forEach(s => {
+      const lat = Number(s.lat), lng = Number(s.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
+      L.circle([lat, lng], {
+        radius: 150,
+        color: "#60a5fa",
+        weight: 1,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.06
+      }).addTo(group);
+    });
+    return group;
+  }
+
+  function toggleHeatmap() {
+    heatOn = !heatOn;
+    if (!heatLayer) return;
+    if (heatOn) heatLayer.addTo(map);
+    else map.removeLayer(heatLayer);
+  }
+
+  function toggleCoverage() {
+    coverageOn = !coverageOn;
+    if (!coverageLayerGroup) return;
+    if (coverageOn) coverageLayerGroup.addTo(map);
+    else map.removeLayer(coverageLayerGroup);
+  }
+
+  // route (nearest-neighbor on stations needing pickup)
+  function distMeters(a, b) {
+    const R = 6371000;
+    const toRad = x => x * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const s =
+      Math.sin(dLat/2)**2 +
+      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  function buildRoute() {
+    const box = document.getElementById("routeBox");
+    const pickup = lastStations.filter(s => (s.fillPct||0) >= 80 || s.odorAlert);
+    if (!pickup.length) {
+      box.textContent = "No pickup-needed stations (>=80% or odorAlert).";
+      if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+      return;
+    }
+
+    pickup.sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
+    const start = pickup[0];
+    const remaining = pickup.slice(1);
+
+    const route = [start];
+    let current = start;
+
+    while (remaining.length) {
+      let bestIdx = 0, bestD = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = distMeters(
+          { lat: Number(current.lat), lng: Number(current.lng) },
+          { lat: Number(remaining[i].lat), lng: Number(remaining[i].lng) }
+        );
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      }
+      const next = remaining.splice(bestIdx, 1)[0];
+      route.push(next);
+      current = next;
+    }
+
+    let total = 0;
+    for (let i = 1; i < route.length; i++) {
+      total += distMeters(
+        { lat: Number(route[i-1].lat), lng: Number(route[i-1].lng) },
+        { lat: Number(route[i].lat), lng: Number(route[i].lng) }
+      );
+    }
+
+    box.textContent =
+      `Pickup Stops: ${route.length}\n` +
+      `Approx Distance: ${(total/1000).toFixed(2)} km\n\n` +
+      route.map((s, i) => `${i+1}) ${s.name || s.id} — ${s.fillPct||0}%${s.odorAlert ? " (odor)" : ""}`).join("\n");
+
+    const coords = route.map(s => [Number(s.lat), Number(s.lng)]);
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(coords, { weight: 4, opacity: 0.85 }).addTo(map);
+    map.fitBounds(L.latLngBounds(coords).pad(0.2));
+  }
+
+  function upsertMarkers(stations) {
+    const seen = new Set();
+
+    stations.forEach(station => {
+      const id = station.id;
+      seen.add(id);
+
+      const lat = Number(station.lat);
+      const lng = Number(station.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
+
+      const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
+      const st = getStatus(fill, !!station.locked);
+
+      const popupHtml = `
+        <div style="min-width:220px">
+          <div style="font-weight:900">${station.name || station.id}</div>
+          <div style="font-size:12px;opacity:0.8">ID: ${station.id}</div>
+          <div style="margin-top:8px;font-size:13px">
+            Fill: <b>${fill}%</b><br/>
+            Odor: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
+            Status: <b>${st.label}</b><br/>
+            Last Seen: <span style="font-size:12px;opacity:0.8">${station.lastSeen || "—"}</span>
+          </div>
+          <div style="margin-top:10px">
+            <button style="padding:8px 10px;border:none;border-radius:10px;background:#3b82f6;color:white;font-weight:900;cursor:pointer;"
+              onclick="markEmptied('${station.id}')">Mark Emptied</button>
+          </div>
+        </div>
+      `;
+
+      if (!markers.has(id)) {
+        const marker = L.marker([lat, lng], { icon: makeDotIcon(st.color) }).addTo(map);
+        marker.bindPopup(popupHtml);
+        marker.on("click", () => renderDetails(station));
+        markers.set(id, marker);
+      } else {
+        const marker = markers.get(id);
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(makeDotIcon(st.color));
+        marker.setPopupContent(popupHtml);
+      }
+    });
+
+    for (const [id, marker] of markers.entries()) {
+      if (!seen.has(id)) {
+        map.removeLayer(marker);
+        markers.delete(id);
+      }
+    }
+  }
+
+  async function refreshStations() {
+    try {
+      const res = await fetch("/api/v1/stations");
+      const data = await res.json();
+      const stations = data.stations || [];
+      lastStations = stations;
+
+      updateStats(stations);
+      renderPickupList(stations);
+      upsertMarkers(stations);
+
+      // overlays rebuild
+      const heatPoints = buildHeatPoints(stations);
+      heatLayer = L.heatLayer(heatPoints, { radius: 32, blur: 22, maxZoom: 17 });
+      if (heatOn) heatLayer.addTo(map);
+
+      coverageLayerGroup = makeCoverageCircles(stations);
+      if (coverageOn) coverageLayerGroup.addTo(map);
+
+      // If route already drawn, refresh it to show changing priorities
+      if (routeLine) buildRoute();
+
+      // fit once
+      if (stations.length && !window.__didFitBounds) {
+        const coords = stations
+          .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+          .map(s => [Number(s.lat), Number(s.lng)]);
+        if (coords.length >= 2) {
+          map.fitBounds(L.latLngBounds(coords).pad(0.2));
+          window.__didFitBounds = true;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // fast refresh for “alive” feel
+  setInterval(refreshStations, 4000);
+  refreshStations();
 </script>
-
 </body>
 </html>
