@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Authority Dashboard (Map)</title>
+  <title>Authority Dashboard — Map</title>
 
-  <!-- Leaflet Map -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Heatmap plugin -->
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <style>
     body {
@@ -22,7 +22,6 @@
       display: flex;
       flex-direction: column;
     }
-
     header {
       padding: 14px 16px;
       background: #070d18;
@@ -31,25 +30,17 @@
       align-items: center;
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
-
-    header h2 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 900;
-      letter-spacing: 0.3px;
-    }
-
+    header h2 { margin: 0; font-size: 16px; font-weight: 900; }
     button {
       padding: 10px 12px;
       border-radius: 10px;
       border: none;
       cursor: pointer;
       font-weight: 900;
+      background: #334155;
+      color: white;
     }
-
-    .logout { background: #ef4444; color: white; }
-    .refresh { background: #334155; color: white; }
-
+    .logout { background: #ef4444; }
     .layout {
       flex: 1;
       display: grid;
@@ -57,7 +48,6 @@
       gap: 12px;
       padding: 12px;
     }
-
     #map {
       width: 100%;
       height: calc(100vh - 70px);
@@ -65,7 +55,6 @@
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
     }
-
     .panel {
       height: calc(100vh - 70px);
       border-radius: 14px;
@@ -74,7 +63,6 @@
       padding: 14px;
       overflow: auto;
     }
-
     .card {
       background: #111827;
       padding: 14px;
@@ -82,7 +70,6 @@
       border: 1px solid rgba(255,255,255,0.08);
       margin-bottom: 12px;
     }
-
     .row {
       display: flex;
       justify-content: space-between;
@@ -90,53 +77,38 @@
       gap: 12px;
       flex-wrap: wrap;
     }
-
     .badge {
       padding: 4px 10px;
       border-radius: 999px;
       font-weight: 900;
       font-size: 12px;
     }
-
     .green { background: rgba(34,197,94,0.18); color: #22c55e; }
     .yellow { background: rgba(250,204,21,0.18); color: #facc15; }
     .red { background: rgba(239,68,68,0.18); color: #ef4444; }
-
-    .muted { opacity: 0.85; }
     .small { font-size: 12px; opacity: 0.8; }
     .metric { font-size: 22px; font-weight: 900; }
 
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-danger { background: #ef4444; color: white; }
-    .btn-disabled { background: #334155; color: #aab3c2; cursor: not-allowed; }
-
-    /* Leaflet popup text */
     .leaflet-popup-content-wrapper {
       background: #0b1220;
       color: white;
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.12);
     }
-    .leaflet-popup-tip {
-      background: #0b1220;
-    }
+    .leaflet-popup-tip { background: #0b1220; }
 
     @media (max-width: 900px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-      #map, .panel {
-        height: 48vh;
-      }
+      .layout { grid-template-columns: 1fr; }
+      #map, .panel { height: 48vh; }
     }
   </style>
 </head>
 
 <body>
   <header>
-    <h2>Authority Dashboard — Live Map</h2>
+    <h2>Authority — Live Map</h2>
     <div class="row">
-      <button class="refresh" onclick="refreshStations()">Refresh</button>
+      <button onclick="refreshStations()">Refresh</button>
       <button class="logout" onclick="logout()">Logout</button>
     </div>
   </header>
@@ -162,17 +134,24 @@
         </div>
       </div>
 
+      <div class="card">
+        <b>Map Layers</b>
+        <div class="small">Toggle overlays</div>
+        <div style="margin-top:10px" class="row">
+          <button onclick="toggleHeatmap()">Heatmap</button>
+          <button onclick="toggleCoverage()">150m Coverage</button>
+          <button onclick="buildRoute()">Optimize Route</button>
+        </div>
+        <div id="routeBox" class="small" style="margin-top:10px; white-space:pre-wrap;"></div>
+      </div>
+
       <div class="card" id="detailsCard">
-        <div class="muted">Click a station marker on the map to view details here.</div>
+        <div class="small">Click a station marker to see details here.</div>
       </div>
 
       <div class="card">
-        <div class="row">
-          <div>
-            <b>Prioritized Pickup List</b>
-            <div class="small">Highest fill first</div>
-          </div>
-        </div>
+        <b>Prioritized Pickup List</b>
+        <div class="small">Highest fill first</div>
         <div id="pickupList" class="small" style="margin-top:10px;">Loading…</div>
       </div>
     </div>
@@ -180,19 +159,26 @@
 
 <script>
   // ===== MAP INIT =====
-  const DEFAULT_CENTER = [26.4205, 50.0888]; // Dammam-ish, adjust as needed
+  const DEFAULT_CENTER = [26.3188612, 50.2277122];
   const DEFAULT_ZOOM = 15;
 
   const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 20,
     attribution: '© OpenStreetMap'
   }).addTo(map);
 
-  // Keep markers by stationId
   const markers = new Map();
   let lastStations = [];
+
+  // overlays
+  let heatLayer = null;
+  let coverageLayerGroup = null;
+  let heatOn = false;
+  let coverageOn = false;
+
+  // route polyline
+  let routeLine = null;
 
   function getStatus(fillPct, locked) {
     const fill = typeof fillPct === "number" ? fillPct : 0;
@@ -204,14 +190,8 @@
   function makeDotIcon(color) {
     return L.divIcon({
       className: "",
-      html: `
-        <div style="
-          width:14px;height:14px;border-radius:50%;
-          background:${color};
-          border:2px solid rgba(255,255,255,0.9);
-          box-shadow:0 0 0 6px rgba(255,255,255,0.08);
-        "></div>
-      `,
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};
+             border:2px solid rgba(255,255,255,0.9);box-shadow:0 0 0 6px rgba(255,255,255,0.08);"></div>`,
       iconSize: [14, 14],
       iconAnchor: [7, 7]
     });
@@ -227,13 +207,21 @@
     await refreshStations();
   }
 
+  function updateStats(stations) {
+    document.getElementById("totalStations").textContent = stations.length;
+
+    const alerts = stations.filter(s => (s.fillPct||0) >= 80);
+    document.getElementById("alertStations").textContent = alerts.length;
+
+    const locked = stations.filter(s => s.locked || (s.fillPct||0) >= 95);
+    document.getElementById("lockedStations").textContent = locked.length;
+  }
+
   function renderDetails(station) {
     const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
-    const locked = !!station.locked;
-    const st = getStatus(fill, locked);
+    const st = getStatus(fill, !!station.locked);
 
-    const details = document.getElementById("detailsCard");
-    details.innerHTML = `
+    document.getElementById("detailsCard").innerHTML = `
       <div class="row">
         <div>
           <div style="font-weight:900;font-size:16px">${station.name || station.id}</div>
@@ -241,24 +229,16 @@
         </div>
         <span class="badge ${st.cls}">${st.label}</span>
       </div>
-
       <div style="height:10px"></div>
-      <div class="muted">
+      <div class="small">
         Fill: <b>${fill}%</b><br/>
         Odor Alert: <b>${station.odorAlert ? "YES" : "NO"}</b><br/>
-        Last Seen: <span class="small">${station.lastSeen || "—"}</span><br/>
-        Last Emptied: <span class="small">${station.lastEmptiedAt || "—"}</span><br/>
-        Location: <span class="small">${(station.lat ?? 0).toFixed(5)}, ${(station.lng ?? 0).toFixed(5)}</span>
+        Last Seen: ${station.lastSeen || "—"}<br/>
+        Last Emptied: ${station.lastEmptiedAt || "—"}<br/>
+        Location: ${(Number(station.lat)||0).toFixed(5)}, ${(Number(station.lng)||0).toFixed(5)}
       </div>
-
       <div style="height:12px"></div>
-      <button class="${locked ? "btn-disabled" : "btn-primary"}"
-        ${locked ? "disabled" : ""} onclick="markEmptied('${station.id}')">
-        Mark Emptied
-      </button>
-      <div class="small" style="margin-top:8px;opacity:0.75">
-        Mark Emptied resets fill to 0% and clears odor/lock flags.
-      </div>
+      <button onclick="markEmptied('${station.id}')">Mark Emptied</button>
     `;
   }
 
@@ -281,7 +261,7 @@
       row.style.borderRadius = "10px";
       row.style.marginBottom = "8px";
       row.style.border = "1px solid rgba(255,255,255,0.08)";
-      row.style.background = "#111827";
+      row.style.background = "#0b1220";
       row.style.cursor = "pointer";
 
       row.innerHTML = `
@@ -307,14 +287,112 @@
     });
   }
 
-  function updateStats(stations) {
-    document.getElementById("totalStations").textContent = stations.length;
+  // ===== Overlays =====
+  function buildHeatPoints(stations) {
+    return stations
+      .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
+      .map(s => [Number(s.lat), Number(s.lng), Math.max(0.1, (s.fillPct || 0) / 100)]);
+  }
 
-    const alerts = stations.filter(s => (s.fillPct||0) >= 80);
-    document.getElementById("alertStations").textContent = alerts.length;
+  function makeCoverageCircles(stations) {
+    const group = L.layerGroup();
+    stations.forEach(s => {
+      const lat = Number(s.lat), lng = Number(s.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
 
-    const locked = stations.filter(s => s.locked || (s.fillPct||0) >= 95);
-    document.getElementById("lockedStations").textContent = locked.length;
+      L.circle([lat, lng], {
+        radius: 150,
+        color: "#60a5fa",
+        weight: 1,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.06
+      }).addTo(group);
+    });
+    return group;
+  }
+
+  function toggleHeatmap() {
+    heatOn = !heatOn;
+    if (!heatLayer) return;
+    if (heatOn) heatLayer.addTo(map);
+    else map.removeLayer(heatLayer);
+  }
+
+  function toggleCoverage() {
+    coverageOn = !coverageOn;
+    if (!coverageLayerGroup) return;
+    if (coverageOn) coverageLayerGroup.addTo(map);
+    else map.removeLayer(coverageLayerGroup);
+  }
+
+  // ===== Route Simulation (nearest-neighbor on pickup-needed) =====
+  function distMeters(a, b) {
+    const R = 6371000;
+    const toRad = x => x * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const s =
+      Math.sin(dLat/2)**2 +
+      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  function buildRoute() {
+    const box = document.getElementById("routeBox");
+
+    // pickup rule: >=80% or odor alert
+    const pickup = lastStations.filter(s => (s.fillPct || 0) >= 80 || s.odorAlert);
+    if (!pickup.length) {
+      box.textContent = "No pickup-needed stations (>=80% or odorAlert).";
+      if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+      return;
+    }
+
+    pickup.sort((a,b) => (b.fillPct||0) - (a.fillPct||0));
+    const start = pickup[0];
+    const remaining = pickup.slice(1);
+
+    const route = [start];
+    let current = start;
+
+    while (remaining.length) {
+      let bestIdx = 0;
+      let bestD = Infinity;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const d = distMeters(
+          { lat: Number(current.lat), lng: Number(current.lng) },
+          { lat: Number(remaining[i].lat), lng: Number(remaining[i].lng) }
+        );
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      }
+
+      const next = remaining.splice(bestIdx, 1)[0];
+      route.push(next);
+      current = next;
+    }
+
+    let total = 0;
+    for (let i = 1; i < route.length; i++) {
+      total += distMeters(
+        { lat: Number(route[i-1].lat), lng: Number(route[i-1].lng) },
+        { lat: Number(route[i].lat), lng: Number(route[i].lng) }
+      );
+    }
+
+    box.textContent =
+      `Pickup Stops: ${route.length}\n` +
+      `Approx Route Distance: ${(total/1000).toFixed(2)} km\n\n` +
+      route.map((s, i) =>
+        `${i+1}) ${s.name || s.id} — ${s.fillPct || 0}%${s.odorAlert ? " (odor)" : ""}`
+      ).join("\n");
+
+    const coords = route.map(s => [Number(s.lat), Number(s.lng)]);
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(coords, { weight: 4, opacity: 0.85 }).addTo(map);
+    map.fitBounds(L.latLngBounds(coords).pad(0.2));
   }
 
   function upsertMarkers(stations) {
@@ -326,11 +404,7 @@
 
       const lat = Number(station.lat);
       const lng = Number(station.lng);
-
-      // ignore invalid coords (0,0) or NaN
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
-        return;
-      }
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
 
       const fill = typeof station.fillPct === "number" ? station.fillPct : 0;
       const st = getStatus(fill, !!station.locked);
@@ -346,10 +420,9 @@
             Last Seen: <span style="font-size:12px;opacity:0.8">${station.lastSeen || "—"}</span>
           </div>
           <div style="margin-top:10px">
-            <button style="
-              padding:8px 10px;border:none;border-radius:10px;
-              background:#3b82f6;color:white;font-weight:900;cursor:pointer;
-            " onclick="markEmptied('${station.id}')">Mark Emptied</button>
+            <button style="padding:8px 10px;border:none;border-radius:10px;
+              background:#3b82f6;color:white;font-weight:900;cursor:pointer;"
+              onclick="markEmptied('${station.id}')">Mark Emptied</button>
           </div>
         </div>
       `;
@@ -357,11 +430,7 @@
       if (!markers.has(id)) {
         const marker = L.marker([lat, lng], { icon: makeDotIcon(st.color) }).addTo(map);
         marker.bindPopup(popupHtml);
-
-        marker.on("click", () => {
-          renderDetails(station);
-        });
-
+        marker.on("click", () => renderDetails(station));
         markers.set(id, marker);
       } else {
         const marker = markers.get(id);
@@ -371,7 +440,6 @@
       }
     });
 
-    // remove markers that no longer exist
     for (const [id, marker] of markers.entries()) {
       if (!seen.has(id)) {
         map.removeLayer(marker);
@@ -391,27 +459,30 @@
       renderPickupList(stations);
       upsertMarkers(stations);
 
-      // Optional: fit bounds first time only
+      // rebuild overlays
+      const heatPoints = buildHeatPoints(stations);
+      heatLayer = L.heatLayer(heatPoints, { radius: 32, blur: 22, maxZoom: 17 });
+      if (heatOn) heatLayer.addTo(map);
+
+      coverageLayerGroup = makeCoverageCircles(stations);
+      if (coverageOn) coverageLayerGroup.addTo(map);
+
+      // fit once
       if (stations.length && !window.__didFitBounds) {
         const coords = stations
           .filter(s => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && !(Number(s.lat)===0 && Number(s.lng)===0))
           .map(s => [Number(s.lat), Number(s.lng)]);
-
         if (coords.length >= 2) {
-          const bounds = L.latLngBounds(coords);
-          map.fitBounds(bounds.pad(0.2));
+          map.fitBounds(L.latLngBounds(coords).pad(0.2));
           window.__didFitBounds = true;
         }
       }
-
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  // Auto refresh every 15s
   setInterval(refreshStations, 15000);
-
   refreshStations();
 </script>
 </body>
