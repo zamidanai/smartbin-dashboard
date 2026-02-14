@@ -221,7 +221,6 @@ app.post("/api/v1/stations/:id/mark-emptied", requireAuthority, (req, res) => {
 // ===== FEEDBACK API =====
 app.post("/api/v1/feedback", requireResident, (req, res) => {
   const { stationId, issueType, note } = req.body || {};
-
   if (!issueType) {
     return res.status(400).json({ ok: false, error: "Missing issueType" });
   }
@@ -241,8 +240,6 @@ app.post("/api/v1/feedback", requireResident, (req, res) => {
 });
 
 // ===== REWARDS API =====
-
-// Current points balance
 app.get("/api/rewards/balance", requireResident, (req, res) => {
   const db = readDB();
   const user = db.users.find((u) => u.id === req.session.user.id);
@@ -250,10 +247,8 @@ app.get("/api/rewards/balance", requireResident, (req, res) => {
   res.json({ ok: true, points: user.points || 0 });
 });
 
-// Anti-abuse: 1 scan per station per hour per user
 function scannedRecently(events, userId, stationId, windowMs) {
   const now = Date.now();
-  // Find any scan in the last windowMs
   return events.some((e) => {
     if (e.type !== "reward_scan") return false;
     if (e.userId !== userId) return false;
@@ -263,7 +258,6 @@ function scannedRecently(events, userId, stationId, windowMs) {
   });
 }
 
-// QR scan (stationId from QR text)
 app.post("/api/rewards/scan", requireResident, (req, res) => {
   const { stationId } = req.body || {};
   if (!stationId) return res.status(400).json({ ok: false, error: "Missing stationId" });
@@ -273,17 +267,11 @@ app.post("/api/rewards/scan", requireResident, (req, res) => {
   if (!user) return res.status(404).json({ ok: false, error: "User not found" });
 
   const stationExists = (db.stations || []).some((s) => s.id === stationId);
-  if (!stationExists) {
-    return res.status(400).json({ ok: false, error: "Invalid stationId" });
-  }
+  if (!stationExists) return res.status(400).json({ ok: false, error: "Invalid stationId" });
 
-  // 1 hour window
-  const WINDOW_MS = 60 * 60 * 1000;
+  const WINDOW_MS = 60 * 60 * 1000; // 1 hour
   if (scannedRecently(db.events || [], user.id, stationId, WINDOW_MS)) {
-    return res.status(429).json({
-      ok: false,
-      error: "You already scanned this station in the last hour."
-    });
+    return res.status(429).json({ ok: false, error: "You already scanned this station in the last hour." });
   }
 
   const pointsEarned = 10;
@@ -302,17 +290,14 @@ app.post("/api/rewards/scan", requireResident, (req, res) => {
   res.json({ ok: true, newBalance: user.points, added: pointsEarned });
 });
 
-// Reward history (scans + redeems)
 app.get("/api/rewards/history", requireResident, (req, res) => {
   const db = readDB();
   const history = (db.events || [])
     .filter((e) => e.userId === req.session.user.id)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-
   res.json({ ok: true, history });
 });
 
-// Leaderboard (Top 10)
 app.get("/api/rewards/leaderboard", (req, res) => {
   const db = readDB();
   const leaderboard = (db.users || [])
@@ -320,18 +305,15 @@ app.get("/api/rewards/leaderboard", (req, res) => {
     .sort((a, b) => (b.points || 0) - (a.points || 0))
     .slice(0, 10)
     .map((u) => ({ name: u.name, points: u.points || 0 }));
-
   res.json({ ok: true, leaderboard });
 });
 
-// Rewards catalog
 app.get("/api/rewards/catalog", (req, res) => {
   const db = ensureRewardsCatalog(readDB());
   writeDB(db);
   res.json({ ok: true, catalog: db.rewardsCatalog });
 });
 
-// Redeem reward by rewardId
 app.post("/api/rewards/redeem", requireResident, (req, res) => {
   const { rewardId } = req.body || {};
   if (!rewardId) return res.status(400).json({ ok: false, error: "Missing rewardId" });
@@ -349,8 +331,6 @@ app.post("/api/rewards/redeem", requireResident, (req, res) => {
   }
 
   user.points -= cost;
-
-  // simple coupon code
   const coupon = "SB-" + Math.random().toString(36).slice(2, 8).toUpperCase();
 
   db.events.push({
@@ -366,13 +346,7 @@ app.post("/api/rewards/redeem", requireResident, (req, res) => {
   });
 
   writeDB(db);
-
-  res.json({
-    ok: true,
-    newBalance: user.points,
-    coupon,
-    reward
-  });
+  res.json({ ok: true, newBalance: user.points, coupon, reward });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
